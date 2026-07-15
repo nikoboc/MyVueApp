@@ -4,6 +4,15 @@ Project conventions for **WeatherBoard** — a real-time weather dashboard built
 project. Full design lives in [`docs/`](./docs/README.md); read `docs/03-state-and-data.md` before
 touching the store.
 
+## Mandatory for AI assistants
+
+The rules in this file and in [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md)
+are **mandatory, not advisory** — AI assistants MUST follow them when writing or changing code.
+
+**Before proposing or making any commit**, review every file you touched against these conventions and
+the architecture rules below, and fix all violations first. Never commit code that breaks the
+conventions. When you self-review, state briefly which rules you checked.
+
 ## Context
 
 - **Owner is a backend Java engineer (7 yrs) learning Vue.** Favor explanations that bridge from
@@ -14,7 +23,8 @@ touching the store.
 ## Tech stack (locked)
 
 - **Vue 3** — Composition API with `<script setup>` **only**. Never Options API.
-- **TypeScript** — strict. Type API boundaries and store state explicitly.
+- **TypeScript** — strict. Type API boundaries and store state explicitly. Follow
+  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md).
 - **Pinia** — setup-style stores (`defineStore("x", () => { ... })`).
 - **Vite** — build/dev tooling.
 - **Chart.js** via `vue-chartjs` — charts.

@@ -12,6 +12,7 @@ Vue's reactive, declarative model — not to ship a product.
 | [02 — Architecture](./02-architecture.md) | Tech stack, project layout, component tree, data flow |
 | [03 — State & Data](./03-state-and-data.md) | Pinia store design, typed models, Open-Meteo integration |
 | [04 — Roadmap](./04-roadmap.md) | Phased build plan, each phase mapped to a Vue concept |
+| [05 — TypeScript Conventions](./05-typescript-conventions.md) | TS coding rules for this project, framed for a Java dev |
 
 ## The one mental shift
 
