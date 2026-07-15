@@ -67,7 +67,7 @@ type Fetcher = (loc: Location) => Promise<Forecast>      // function type
 ```
 
 **No `I` prefix** on interfaces (`ILocation` is a C#/some-Java-shop habit; the TS community uses plain
-`Location`). Type names are `PascalCase`.
+`Location`). Type names are `PascalCase`. (Full naming rules: §16.)
 
 ## 3. Prefer string-literal unions over `enum`
 
@@ -323,6 +323,51 @@ const emit = defineEmits<{ (e: "remove", id: string): void }>()
 
 Rule of thumb: annotate `ref`/`computed` when the initial value doesn't pin the type (e.g. `ref<Location[]>([])`
 or a ref that starts `null`); otherwise let inference do it.
+
+## 16. Naming conventions
+
+Consistent names make the codebase scannable. The casing rules below are the TypeScript community norm;
+most map cleanly from Java, with a few deltas called out at the end.
+
+| Kind | Case | Example |
+|------|------|---------|
+| Variables, parameters, object properties | `camelCase` | `currentTemp`, `fetchedAt` |
+| Functions & methods | `camelCase`, verb-first | `getForecast`, `mapLocation`, `formatTime` |
+| Types, interfaces, classes, enums | `PascalCase` | `Location`, `Forecast`, `WeatherView` |
+| Enum members | `PascalCase` | `WeatherView.Hourly` |
+| Module-level true constants | `UPPER_SNAKE_CASE` | `MAX_LOCATIONS`, `DEFAULT_REFRESH_MS` |
+| Generic type parameters | `PascalCase`, descriptive | `TItem`, `TResponse` (or `T` when obvious) |
+| Vue components | `PascalCase` | `LocationCard.vue` |
+| Files (non-component) | see `CLAUDE.md` | `weatherApi.ts`, `useWeatherStore.ts` |
+
+**Rules & nuances:**
+
+- **`camelCase` for values, `PascalCase` for types.** Familiar from Java — the difference is that TS puts
+  *interfaces* in `PascalCase` too, with no `I` prefix (§2).
+- **Constants:** reserve `UPPER_SNAKE_CASE` for genuine fixed constants (config, magic numbers lifted to a
+  name), like Java `static final`. A `const` that merely holds a local value stays `camelCase` —
+  `const url = ...`, not `URL`. So `const MAX_LOCATIONS = 8`, but `const forecast = await getForecast(loc)`.
+- **Booleans read like yes/no questions:** prefix with `is` / `has` / `should` / `can` — `isLoading`,
+  `hasData`, `shouldRefresh`. Avoid negatives (`isNotReady` → prefer `isReady`).
+- **Functions are verb-first:** `getForecast`, `buildUrl`, `mapCurrent`, `removeLocation`. Unlike Java
+  beans, idiomatic TS reads plain properties without a `get` prefix (`loc.name`, not `loc.getName()`) — but
+  functions that *do work* still start with a verb.
+- **No Hungarian / type prefixes:** no `I` on interfaces, no `T` on type aliases, no `str`/`arr` prefixes.
+  The type system already tells you the type.
+- **Avoid cryptic abbreviations.** `temperature` over `tmp`, `index` over `idx` (a short-lived loop `i` in
+  a tiny scope is fine). Names are documentation.
+- **Composables & stores** follow `CLAUDE.md`: `useX` (`useAutoRefresh`) and `useXStore`
+  (`useWeatherStore`). The `use` prefix is the Vue signal for "reactive/stateful hook."
+- **Emit event names** are verb-based and `kebab-case` at the call/handler site — `emit('remove', id)`
+  handled as `@remove`.
+
+**Java → TS naming deltas:**
+
+- Interfaces: Java's `IFoo` / `FooImpl` → plain `Foo` in TS (structural typing, §0).
+- Getters: Java `getName()` / `isActive()` → read the property directly in TS (`name`, `active`); only
+  functions that compute or fetch keep a verb.
+- Constants: Java `static final MAX` (`UPPER_SNAKE`) → identical in TS for true constants.
+- Packages/classes → files: `camelCase.ts` for modules, `PascalCase.vue` for components.
 
 ## Java → TypeScript quick reference
 

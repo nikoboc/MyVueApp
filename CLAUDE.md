@@ -48,6 +48,8 @@ conventions. When you self-review, state briefly which rules you checked.
 - Components: `PascalCase.vue`. Reusable primitives get a `Base` prefix (`BaseSpinner.vue`).
 - Stores: `useXStore.ts`, exported as `useXStore`.
 - Composables: `useX.ts` in `src/composables/`.
+- Identifier naming (variables, functions, constants, booleans, generics): follow
+  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) §16.
 - Follow the project layout in `docs/02-architecture.md`.
 
 ## Workflow
@@ -59,8 +61,16 @@ conventions. When you self-review, state briefly which rules you checked.
 
 ## Commands
 
-_To be filled in after Phase 0 scaffolding. Expected:_
-
-- `npm run dev` — start the Vite dev server
-- `npm run build` — type-check + production build
+- `npm install` — install dependencies
+- `npm run dev` — start the Vite dev server (http://localhost:5173)
+- `npm run build` — type-check (`vue-tsc --noEmit`) + production build
+- `npm run type-check` — type-check only
 - `npm run preview` — preview the production build
+
+## Toolchain constraints (do not "upgrade" past these)
+
+- **TypeScript pinned to 5.x** (`^5`). TypeScript 7 (the native compiler) is out but `vue-tsc` 3 does
+  not support it yet — installing `typescript@latest` breaks the build (`./lib/tsc` not exported). Keep
+  TS on 5.x until `vue-tsc` announces TS 7 support.
+- **Pinia pinned to 3.x** (`^3`). Pinia `4.0.1` shipped a broken `exports` map (no `types` condition),
+  so TS can't resolve its declarations. Avoid 4.x until that packaging bug is fixed upstream.
