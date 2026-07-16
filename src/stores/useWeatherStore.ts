@@ -51,7 +51,12 @@ export const useWeatherStore = defineStore('weather', () => {
    * @param loc - the location to add
    */
   async function addLocation(loc: Location): Promise<void> {
-    if (forecasts.value[loc.id]) {
+    // Dedupe against `locations`, not `forecasts`: a location whose fetch failed
+    // (or is still in flight) has no forecast entry yet, so keying the guard off
+    // `forecasts` would let the same city be added twice — duplicate `v-for`
+    // keys and a doubled card. `locations` is the list the UI renders, so it is
+    // the list the guard must protect.
+    if (locations.value.some((l) => l.id === loc.id)) {
       return
     }
     locations.value.push(loc)
