@@ -13,7 +13,7 @@
     "noEmit": true,
     "jsx": "preserve",
 
-    /* Strictness — mirrors docs/05 §1. Never relax these to silence an error. */
+    /* 厳格化の設定 — docs/05 §1 に対応。エラーを抑制する目的で緩めてはならない。 */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -22,7 +22,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
 
-    /* Path alias — docs/05 §10. Keep in sync with vite.config.ts. */
+    /* パスエイリアス — docs/05 §10。vite.config.ts と同期させること。 */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

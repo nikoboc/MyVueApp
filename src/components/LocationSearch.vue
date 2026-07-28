@@ -6,31 +6,31 @@ import { useWeatherStore } from '@/stores/useWeatherStore'
 import type { Location } from '@/types/weather'
 
 /**
- * Search box + geocoding results dropdown.
+ * 検索ボックスと、ジオコーディング結果のドロップダウン。
  *
- * Its job is "help the user pick a place" — nothing more. It asks the store to
- * *find* candidates, but it does not decide what happens to the one the user
- * picks: it emits `select` and lets the parent own that ("events up",
- * CLAUDE.md rule 2). Searching reads; adding mutates, and the component that
- * owns the dashboard should own the mutation.
+ * このコンポーネントが担当するのは、ユーザーが地点を選択するまでである。候補の
+ * 検索はストアへ委譲するが、選択された地点をその後どう扱うかは決定しない。
+ * `select` を emit し、判断は親に委ねる（events up。CLAUDE.md 規約 2）。検索は
+ * 読み取りであるのに対し追加は状態の変更であり、ダッシュボードを管理する
+ * コンポーネントが担当すべきものだからである。
  */
 const emit = defineEmits<{ (e: 'select', location: Location): void }>()
 
 const store = useWeatherStore()
 
-// Ephemeral UI state — only this component cares what's half-typed in the box
-// or which candidates are on screen, so it stays local rather than in Pinia
-// (CLAUDE.md rule 1 allows exactly this).
+// 一時的な UI 状態。入力途中の文字列および表示中の候補を必要とするのはこの
+// コンポーネントのみであるため、Pinia ではなくローカルに保持する。CLAUDE.md
+// 規約 1 が例外として認めているのがこのケースである。
 const query = ref('')
 const matches = ref<Location[]>([])
 const isSearching = ref(false)
 const hasSearched = ref(false)
 
 /**
- * Runs the geocoding search for the typed query.
+ * 入力された文字列でジオコーディング検索を実行する。
  *
- * Searching on submit rather than on every keystroke keeps us off the free API's
- * rate limits; debounced live search needs `watch`, which is a later phase.
+ * キー入力のたびではなく送信時に検索することで、無料 API のレート制限を回避して
+ * いる。入力に追随する検索の実装には `watch` を要するが、これは後のフェーズで扱う。
  */
 async function search(): Promise<void> {
   if (query.value.trim().length < 1) {
@@ -41,15 +41,15 @@ async function search(): Promise<void> {
     matches.value = await store.searchLocations(query.value)
     hasSearched.value = true
   } finally {
-    // `finally` so a thrown error can't leave the spinner stuck on forever.
+    // `finally` に配置することで、例外が発生してもスピナーが残り続けない。
     isSearching.value = false
   }
 }
 
 /**
- * Hands the picked location to the parent and resets the dropdown.
+ * 選択された地点を親へ渡し、ドロップダウンをリセットする。
  *
- * @param location - the candidate the user clicked
+ * @param location - ユーザーがクリックした候補
  */
 function select(location: Location): void {
   emit('select', location)
@@ -61,19 +61,27 @@ function select(location: Location): void {
 
 <template>
   <div class="search">
-    <!-- `v-model` is two-way binding: it wires the input's value to `query` and
-         writes changes back. Sugar for :value + @input. `.prevent` stops the
-         browser's native form submit (a full page reload). -->
+    <!-- `v-model` は双方向バインディングであり、input の値を `query` に結び付け、
+         変更を書き戻す。:value と @input を組み合わせた記法の糖衣構文にあたる。
+         `.prevent` はブラウザ標準のフォーム送信（ページ全体のリロード）を抑止する。 -->
     <form @submit.prevent="search">
-      <input v-model="query" type="search" placeholder="Search a city, e.g. Berlin" aria-label="City name" />
-      <button type="submit" :disabled="isSearching">Search</button>
+      <!-- 例をローマ字としているのは表記上の選好ではなく、API の制約による。
+           Open-Meteo のジオコーディングでは、日本の都市を漢字で検索できない
+           （weatherApi.ts の GEOCODING_LANGUAGE のコメントを参照）。 -->
+      <input
+        v-model="query"
+        type="search"
+        placeholder="都市名をローマ字で検索（例：Tokyo）"
+        aria-label="都市名（ローマ字）"
+      />
+      <button type="submit" :disabled="isSearching">検索</button>
     </form>
 
-    <BaseSpinner v-if="isSearching" label="Searching…" />
+    <BaseSpinner v-if="isSearching" label="検索中…" />
 
-    <!-- `:key` gives Vue a stable identity per row so it patches the existing
-         DOM instead of rebuilding the list. Location.id is "lat,lon" — unique
-         even when two cities share a name. -->
+    <!-- `:key` で各行に一意な識別子を与えることで、Vue はリストを再生成せず
+         既存の DOM を差分更新できる。Location.id は「緯度,経度」であるため、
+         同名の都市が存在しても重複しない。 -->
     <ul v-else-if="0 < matches.length" class="results">
       <li v-for="location in matches" :key="location.id">
         <button type="button" @click="select(location)">
@@ -83,9 +91,12 @@ function select(location: Location): void {
       </li>
     </ul>
 
-    <!-- Only claim "no matches" when the search actually succeeded — on failure
-         the store sets `error` and App shows it, and both at once would lie. -->
-    <p v-else-if="hasSearched && !store.error" class="no-results">No matches for “{{ query }}”.</p>
+    <!-- 「該当なし」を表示するのは検索が成功した場合に限る。失敗時はストアが
+         `error` を設定し App がそれを表示するため、両方を同時に表示すると
+         誤った案内となる。 -->
+    <p v-else-if="hasSearched && !store.error" class="no-results">
+      「{{ query }}」に一致する地点はありませんでした。
+    </p>
   </div>
 </template>
 

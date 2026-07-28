@@ -1,63 +1,65 @@
 /**
- * WMO weather-code lookup. Open-Meteo reports conditions as numeric WMO codes
- * (https://open-meteo.com/en/docs); this turns them into something a human can
- * read. Plain TypeScript with zero Vue, like the rest of `services/`.
+ * WMO 天気コードの変換テーブル。Open-Meteo は天気を数値の WMO コードで返す
+ * （https://open-meteo.com/en/docs）ため、表示可能な表現へ変換する。
+ * `services/` 配下の他のファイルと同様、Vue を含まない純粋な TypeScript である。
  */
 
-/** How one weather code is presented in the UI. */
+/** 天気コード 1 件の UI 上での表現。 */
 export interface WeatherDescription {
   readonly label: string
   readonly icon: string
 }
 
-/** Shown when the API reports a code we have no entry for. */
-const UNKNOWN_WEATHER: WeatherDescription = { label: 'Unknown', icon: '❓' }
+/** テーブルに存在しないコードが返された場合の表示。 */
+const UNKNOWN_WEATHER: WeatherDescription = { label: '不明', icon: '❓' }
 
 /**
- * WMO code → label/icon. The codes are sparse and grouped by family (0–3 clear
- * to overcast, 45/48 fog, 51–57 drizzle, 61–67 rain, 71–77 snow, 80–86 showers,
- * 95–99 thunderstorm), which is why this is a keyed map rather than an array.
+ * WMO コードからラベルとアイコンへの変換表。コードは連番ではなく、系統ごとに
+ * 不連続な値をとる（0〜3 が快晴からくもり、45/48 が霧、51〜57 が霧雨、
+ * 61〜67 が雨、71〜77 が雪、80〜86 がにわか雨とにわか雪、95〜99 が雷雨）。
+ * そのため配列ではなく、キー付きのマップとしている。
  */
 const WEATHER_CODES: Record<number, WeatherDescription> = {
-  0: { label: 'Clear sky', icon: '☀️' },
-  1: { label: 'Mainly clear', icon: '🌤️' },
-  2: { label: 'Partly cloudy', icon: '⛅' },
-  3: { label: 'Overcast', icon: '☁️' },
-  45: { label: 'Fog', icon: '🌫️' },
-  48: { label: 'Rime fog', icon: '🌫️' },
-  51: { label: 'Light drizzle', icon: '🌦️' },
-  53: { label: 'Moderate drizzle', icon: '🌦️' },
-  55: { label: 'Dense drizzle', icon: '🌦️' },
-  56: { label: 'Light freezing drizzle', icon: '🌧️' },
-  57: { label: 'Dense freezing drizzle', icon: '🌧️' },
-  61: { label: 'Slight rain', icon: '🌧️' },
-  63: { label: 'Moderate rain', icon: '🌧️' },
-  65: { label: 'Heavy rain', icon: '🌧️' },
-  66: { label: 'Light freezing rain', icon: '🌧️' },
-  67: { label: 'Heavy freezing rain', icon: '🌧️' },
-  71: { label: 'Slight snowfall', icon: '🌨️' },
-  73: { label: 'Moderate snowfall', icon: '🌨️' },
-  75: { label: 'Heavy snowfall', icon: '❄️' },
-  77: { label: 'Snow grains', icon: '🌨️' },
-  80: { label: 'Slight rain showers', icon: '🌦️' },
-  81: { label: 'Moderate rain showers', icon: '🌦️' },
-  82: { label: 'Violent rain showers', icon: '⛈️' },
-  85: { label: 'Slight snow showers', icon: '🌨️' },
-  86: { label: 'Heavy snow showers', icon: '❄️' },
-  95: { label: 'Thunderstorm', icon: '⛈️' },
-  96: { label: 'Thunderstorm with slight hail', icon: '⛈️' },
-  99: { label: 'Thunderstorm with heavy hail', icon: '⛈️' },
+  0: { label: '快晴', icon: '☀️' },
+  1: { label: 'おおむね晴れ', icon: '🌤️' },
+  2: { label: '一部くもり', icon: '⛅' },
+  3: { label: 'くもり', icon: '☁️' },
+  45: { label: '霧', icon: '🌫️' },
+  48: { label: '着氷性の霧', icon: '🌫️' },
+  51: { label: '弱い霧雨', icon: '🌦️' },
+  53: { label: '霧雨', icon: '🌦️' },
+  55: { label: '強い霧雨', icon: '🌦️' },
+  56: { label: '弱い着氷性の霧雨', icon: '🌧️' },
+  57: { label: '強い着氷性の霧雨', icon: '🌧️' },
+  61: { label: '弱い雨', icon: '🌧️' },
+  63: { label: '雨', icon: '🌧️' },
+  65: { label: '強い雨', icon: '🌧️' },
+  66: { label: '弱い着氷性の雨', icon: '🌧️' },
+  67: { label: '強い着氷性の雨', icon: '🌧️' },
+  71: { label: '弱い雪', icon: '🌨️' },
+  73: { label: '雪', icon: '🌨️' },
+  75: { label: '強い雪', icon: '❄️' },
+  77: { label: '霧雪', icon: '🌨️' },
+  80: { label: '弱いにわか雨', icon: '🌦️' },
+  81: { label: 'にわか雨', icon: '🌦️' },
+  82: { label: '激しいにわか雨', icon: '⛈️' },
+  85: { label: '弱いにわか雪', icon: '🌨️' },
+  86: { label: '強いにわか雪', icon: '❄️' },
+  95: { label: '雷雨', icon: '⛈️' },
+  96: { label: '雷雨（弱いひょう）', icon: '⛈️' },
+  99: { label: '雷雨（強いひょう）', icon: '⛈️' },
 }
 
 /**
- * Describes a WMO weather code for display.
+ * WMO 天気コードを表示用の説明へ変換する。
  *
- * @param code - the WMO code reported by the API
- * @returns the matching label and icon, or an "Unknown" fallback
+ * @param code - API から返された WMO コード
+ * @returns 対応するラベルとアイコン。未定義のコードの場合は「不明」を返す
  */
 export function describeWeather(code: number): WeatherDescription {
-  // `noUncheckedIndexedAccess` (docs/05 §1) types this lookup as
-  // `WeatherDescription | undefined`, so the compiler forces the fallback —
-  // it isn't just defensive habit. WMO also defines codes we don't map.
+  // `noUncheckedIndexedAccess`（docs/05 §1）が有効であるため、この参照の型は
+  // `WeatherDescription | undefined` となる。したがって `??` は防御的な記述では
+  // なく、コンパイラが要求するものである。実際、WMO にはここで扱っていない
+  // コードも存在する。
   return WEATHER_CODES[code] ?? UNKNOWN_WEATHER
 }

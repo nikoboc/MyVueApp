@@ -5,19 +5,18 @@ import { describeWeather } from '@/services/weatherCodes'
 import type { CurrentWeather } from '@/types/weather'
 
 /**
- * Pure presentational component: everything it renders arrives through props
- * ("props down"). It never reads the store and never fetches, so it is trivial
- * to reuse and to reason about — the Vue equivalent of a function of its inputs.
+ * 表示のみを担当するコンポーネント。描画に必要なデータはすべて props で受け取る
+ * （props down）。ストアを参照せず、データ取得も行わないため、再利用が容易であり
+ * 動作の追跡もしやすい。入力のみで出力が決まる関数に相当する。
  */
 const props = defineProps<{ current: CurrentWeather }>()
 
-// Read through `props.x` rather than destructuring. Destructuring copies the
-// value out of the reactive proxy, so the copy would never update when the
-// forecast refreshes — the reactivity trap worth internalising early.
+// 分割代入は行わず `props.x` の形で参照する。分割代入するとリアクティブな
+// プロキシから値がコピーされ、予報を更新してもそのコピーは変化しない。
 const description = computed(() => describeWeather(props.current.weatherCode))
 
-// Open-Meteo's defaults are metric (°C, %, km/h). A unit toggle is a later
-// stretch goal; until then the units are fixed and labelled here.
+// Open-Meteo の既定はメートル法である（°C、%、km/h）。単位の切り替えは
+// ストレッチ課題であるため、当面は単位を固定し、ここでラベルとして表示する。
 const temperature = computed(() => Math.round(props.current.temperature))
 const windSpeed = computed(() => Math.round(props.current.windSpeed))
 </script>
@@ -34,11 +33,11 @@ const windSpeed = computed(() => Math.round(props.current.windSpeed))
 
     <dl class="details">
       <div>
-        <dt>Humidity</dt>
+        <dt>湿度</dt>
         <dd>{{ current.humidity }}%</dd>
       </div>
       <div>
-        <dt>Wind</dt>
+        <dt>風速</dt>
         <dd>{{ windSpeed }} km/h</dd>
       </div>
     </dl>

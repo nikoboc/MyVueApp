@@ -1,16 +1,17 @@
 <script setup lang="ts">
-// A reusable primitive — hence the `Base` prefix (CLAUDE.md naming). It knows
-// nothing about weather or the store; it just spins.
+// 再利用可能な部品であるため `Base` を接頭辞としている（CLAUDE.md の命名規約）。
+// 天気にもストアにも依存しない。
 //
-// `withDefaults` supplies a default for the optional prop. Note we don't assign
-// the result to a variable: in `<script setup>` the template can read props by
-// name directly, and `noUnusedLocals` would flag an unused binding.
-withDefaults(defineProps<{ label?: string }>(), { label: 'Loading…' })
+// `withDefaults` は省略可能な prop にデフォルト値を設定する。結果を変数へ代入
+// していないのは、`<script setup>` ではテンプレートから prop を名前で直接参照
+// できるためであり、変数で受けると `noUnusedLocals` に抵触する。
+withDefaults(defineProps<{ label?: string }>(), { label: '読み込み中…' })
 </script>
 
 <template>
-  <!-- role="status" + aria-label announce the wait to screen readers, which see
-       no animation. The visual is decorative, so the text lives in the label. -->
+  <!-- スクリーンリーダーはアニメーションを認識できないため、role="status" と
+       aria-label で待機中であることを伝える。視覚表現は装飾であり、情報は
+       label 側に保持する。 -->
   <span class="spinner" role="status" :aria-label="label" />
 </template>
 
@@ -31,7 +32,7 @@ withDefaults(defineProps<{ label?: string }>(), { label: 'Loading…' })
   }
 }
 
-/* Respect users who ask for reduced motion: fade instead of spin. */
+/* 視差効果を減らす設定が有効な場合は、回転ではなくフェードで表現する。 */
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation: pulse 1.4s ease-in-out infinite;

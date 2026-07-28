@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WeatherBoard</title>
+    <title>WeatherBoard — お天気ダッシュボード</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -13,7 +13,10 @@
       }
       body {
         margin: 0;
-        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        /* 和文フォントを明示的に指定する。system-ui のみでも多くの環境で日本語は
+           表示されるが、フォールバックを列挙することで環境による字形の差を抑える。 */
+        font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP",
+          Meiryo, Roboto, sans-serif;
       }
     </style>
   </head>

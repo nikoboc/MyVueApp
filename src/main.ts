@@ -3,5 +3,6 @@ import { createPinia } from 'pinia'
 
 import App from '@/App.vue'
 
-// Install Pinia before mounting so every component can reach the stores.
+// mount より先に Pinia を install する。これによりすべてのコンポーネントから
+// ストアを参照できるようになる。
 createApp(App).use(createPinia()).mount('#app')
