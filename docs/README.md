@@ -1,31 +1,33 @@
-# WeatherBoard — Design Docs
+# WeatherBoard — 設計ドキュメント
 
-A real-time weather dashboard built with **Vue 3 + TypeScript + Pinia**, backed by the free
-[Open-Meteo](https://open-meteo.com/) API. This is a learning project: the goal is to internalize
-Vue's reactive, declarative model — not to ship a product.
+**Vue 3 + TypeScript + Pinia** で構築する、リアルタイムな天気ダッシュボードである。データは無料の
+[Open-Meteo](https://open-meteo.com/) API から取得する。学習を目的としたプロジェクトであり、成果物の
+完成よりも、Vue のリアクティブかつ宣言的なモデルの習得を主眼とする。
 
-## Documents
+## ドキュメント一覧
 
-| Doc | What it covers |
+| ドキュメント | 内容 |
 |-----|----------------|
-| [01 — Overview](./01-overview.md) | Vision, features (MVP + stretch), scope and non-goals |
-| [02 — Architecture](./02-architecture.md) | Tech stack, project layout, component tree, data flow |
-| [03 — State & Data](./03-state-and-data.md) | Pinia store design, typed models, Open-Meteo integration |
-| [04 — Roadmap](./04-roadmap.md) | Phased build plan, each phase mapped to a Vue concept |
-| [05 — TypeScript Conventions](./05-typescript-conventions.md) | TS coding rules for this project, framed for a Java dev |
+| [01 — 概要](./01-overview.md) | 目的、機能（MVP とストレッチ）、対象範囲と対象外 |
+| [02 — アーキテクチャ](./02-architecture.md) | 技術スタック、ディレクトリ構成、コンポーネントツリー、データフロー |
+| [03 — 状態とデータ](./03-state-and-data.md) | Pinia ストアの設計、型付きモデル、Open-Meteo との連携 |
+| [04 — ロードマップ](./04-roadmap.md) | フェーズごとの開発計画。各フェーズが 1 つの Vue の概念に対応する |
+| [05 — TypeScript 規約](./05-typescript-conventions.md) | 本プロジェクトの TypeScript コーディング規約（Java エンジニア向け） |
 
-## The one mental shift
+## 前提となる考え方の転換
 
-Coming from Java/servlets, the instinct is *imperative*: "when the user does X, go find the DOM node
-and update it." Vue is *declarative*: **the view is a pure function of state.** You change state; Vue
-recomputes what the DOM should look like and patches it for you. Every design decision in these docs
-serves that model — which is why state (the Pinia store) is the center of gravity, not the components.
+Java やサーブレットの経験がある場合、**手続き的**な発想になりやすい。すなわち「ユーザーが操作したら、
+DOM を取得して書き換える」という考え方である。Vue は**宣言的**であり、**画面は状態から導出される**。
+状態を変更すれば、DOM への反映は Vue が計算して行う。
 
-## Decisions locked in
+本ドキュメントに記載した設計判断は、いずれもこのモデルに基づく。中心に位置するのがコンポーネントでは
+なく状態（Pinia ストア）であるのも、同じ理由による。
 
-- **Framework:** Vue 3, Composition API, `<script setup>` (the modern default — ignore Options API tutorials)
-- **Language:** TypeScript
-- **Build tool:** Vite
-- **State:** Pinia
-- **Charts:** Chart.js via `vue-chartjs`
-- **Data source:** Open-Meteo (no API key required)
+## 確定事項
+
+- **フレームワーク:** Vue 3、Composition API、`<script setup>`（現行の標準。Options API の解説は対象外）
+- **言語:** TypeScript
+- **ビルドツール:** Vite
+- **状態管理:** Pinia
+- **グラフ:** Chart.js（`vue-chartjs` 経由）
+- **データソース:** Open-Meteo（API キー不要）

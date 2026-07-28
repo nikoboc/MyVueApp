@@ -1,76 +1,96 @@
 # CLAUDE.md
 
-Project conventions for **WeatherBoard** — a real-time weather dashboard built as a Vue learning
-project. Full design lives in [`docs/`](./docs/README.md); read `docs/03-state-and-data.md` before
-touching the store.
+**WeatherBoard** のプロジェクト規約である。Vue の学習用に構築する、リアルタイムな天気ダッシュボードを
+対象とする。設計の全体は [`docs/`](./docs/README.md) に記載している。ストアを変更する前に
+`docs/03-state-and-data.md` を参照すること。
 
-## Mandatory for AI assistants
+## AI アシスタントへ（必須）
 
-The rules in this file and in [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md)
-are **mandatory, not advisory** — AI assistants MUST follow them when writing or changing code.
+本ファイルおよび [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) の規則は、
+参考ではなく必須である。コードを記述または変更する際は必ず従うこと。
 
-**Before proposing or making any commit**, review every file you touched against these conventions and
-the architecture rules below, and fix all violations first. Never commit code that breaks the
-conventions. When you self-review, state briefly which rules you checked.
+コミットを提案する前、および実際にコミットする前に、変更したファイルを本規約および下記の
+アーキテクチャ規約と照合し、違反があれば先に修正すること。規約に違反したコードをコミットしては
+ならない。自己レビューの際は、確認した規則を簡潔に述べること。
 
-## Context
+## 前提
 
-- **Owner is a backend Java engineer (7 yrs) learning Vue.** Favor explanations that bridge from
-  Java/OOP/backend concepts. When introducing a new Vue idea, name it and say what it maps to.
-- This is a **learning project**: prefer clear, idiomatic, teachable code over clever code. Explain the
-  "why," not just the "what."
+- **オーナーは Java のバックエンドエンジニア（7 年）であり、Vue を学習中である。** 説明は Java、
+  オブジェクト指向、バックエンドの概念から接続する形とする。Vue の新しい概念を導入する際は、名称と
+  対応する概念を併せて示すこと。
+- **学習用のプロジェクト**であるため、技巧的なコードよりも、明快で定石に沿った説明しやすいコードを
+  優先する。「何をしているか」に加えて「なぜそうするか」も説明すること。
 
-## Tech stack (locked)
+## 技術スタック（変更しない）
 
-- **Vue 3** — Composition API with `<script setup>` **only**. Never Options API.
-- **TypeScript** — strict. Type API boundaries and store state explicitly. Follow
-  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md).
-- **Pinia** — setup-style stores (`defineStore("x", () => { ... })`).
-- **Vite** — build/dev tooling.
-- **Chart.js** via `vue-chartjs` — charts.
-- **Open-Meteo** — data source, called directly from the browser. No API key, no custom backend.
+- **Vue 3** — Composition API と `<script setup>` のみを使用する。Options API は使用しない。
+- **TypeScript** — strict。API の境界とストアの状態には型を明示する。
+  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) に従うこと。
+- **Pinia** — setup 形式のストア（`defineStore("x", () => { ... })`）。
+- **Vite** — ビルドおよび開発用ツール。
+- **Chart.js**（`vue-chartjs` 経由）— グラフ。
+- **Open-Meteo** — データソース。ブラウザから直接呼び出す。API キーおよび独自バックエンドは使用しない。
 
-## Architecture rules (non-negotiable — these are the "criteria")
+## アーキテクチャ規約（変更不可。これを判定基準とする）
 
-1. **Store is the single source of truth.** Global state lives in Pinia. Components read from the store
-   and trigger actions; they do not hold app state locally beyond ephemeral UI state.
-2. **Props down, events up.** Components receive data via `props` and communicate upward via `emit`.
-3. **Components never call the API directly.** They call store actions. The store calls the service.
-4. **Keep Vue out of the service layer.** `src/services/` and `src/types/` are plain TypeScript with
-   zero Vue imports — unit-testable and framework-agnostic (the anti-corruption layer).
-5. **Map at the boundary.** The service maps Open-Meteo JSON into our own domain types; the rest of the
-   app never sees raw API field names.
-6. **Clean up side effects.** Any `setInterval`/listener set up in `onMounted` must be torn down in
-   `onUnmounted` (prefer a composable).
+1. **状態はストアに集約する。** グローバルな状態は Pinia に配置する。コンポーネントはストアから参照し、
+   アクションを起動する。一時的な UI 状態を超える状態をコンポーネントが保持してはならない。
+2. **props down, events up。** コンポーネントはデータを `props` で受け取り、上位へは `emit` で伝達する。
+3. **コンポーネントから API を直接呼び出さない。** 呼び出すのはストアのアクションであり、サービスを
+   呼び出すのはストアである。
+4. **サービス層に Vue を含めない。** `src/services/` と `src/types/` は Vue を一切 import しない純粋な
+   TypeScript とし、単体テスト可能かつフレームワークに依存しない状態を保つ（腐敗防止層）。
+5. **変換は境界で行う。** サービス層が Open-Meteo の JSON をドメイン型へ変換し、他の層が API の
+   フィールド名を参照しないようにする。
+6. **副作用はクリーンアップする。** `onMounted` で開始した `setInterval` やリスナーは、必ず
+   `onUnmounted` で破棄する（コンポーザブルへの切り出しが望ましい）。
 
-## Naming & structure
+## 命名と構成
 
-- Components: `PascalCase.vue`. Reusable primitives get a `Base` prefix (`BaseSpinner.vue`).
-- Stores: `useXStore.ts`, exported as `useXStore`.
-- Composables: `useX.ts` in `src/composables/`.
-- Identifier naming (variables, functions, constants, booleans, generics): follow
-  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) §16.
-- Follow the project layout in `docs/02-architecture.md`.
+- コンポーネント: `PascalCase.vue`。再利用可能なものには `Base` を付与する（`BaseSpinner.vue`）。
+- ストア: `useXStore.ts`。`useXStore` として export する。
+- コンポーザブル: `src/composables/` に `useX.ts`。
+- 識別子の命名（変数、関数、定数、真偽値、ジェネリクス）は
+  [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) §16 に従う。
+- ディレクトリ構成は `docs/02-architecture.md` に従う。
 
-## Workflow
+## 表示言語
 
-- **Build in the phases defined in `docs/04-roadmap.md`.** One concept per increment; don't jump ahead.
-- **Commit per phase**, Conventional Commits style (`feat:`, `docs:`, `chore:`, `refactor:`).
-  `.planning/`-style noise doesn't apply here — commits are small and readable on purpose.
-- Only commit/push when explicitly asked.
+- **UI に表示される文字列、コード内のコメント、ドキュメントはすべて日本語で記述する。** ボタン、
+  ラベル、プレースホルダー、`aria-label`、エラーメッセージ、天気コードのラベルを含む。
+- 文体は**常体（だ・である調）で統一する。**
+- 日本語は**英文の直訳としない。** 以下に注意すること。
+  - 読者への呼びかけや推量（「〜してほしい」「〜だろう」「〜はずだ」「覚えておきたい」）を用いず、
+    事実を淡々と記述する。
+  - 英語の比喩をそのまま訳さない（"a hole in the hull"、"escape hatch"、"reach for X" など）。
+    意味の通る日本語の表現に置き換える。
+  - 英文の構文をなぞらない。1 文が長くなる場合は分割する。
+- **コードの識別子は英語のままとする**（変数名、関数名、型名、ファイル名、Pinia のストア ID、
+  emit するイベント名）。§16 の命名規約をそのまま適用する。
+- ジオコーディングは `language=ja` で呼び出しているため、地名と国名は日本語で返る。ただしこれが
+  影響するのは返却されるラベルのみで、検索クエリ側は日本の都市を漢字で検索できない（`name=東京` は
+  0 件、`name=Tokyo` であれば「東京都」）。UI がローマ字入力を案内しているのはこのためである。
+  詳細は `docs/03-state-and-data.md` および `src/services/weatherApi.ts` を参照。
 
-## Commands
+## 進め方
 
-- `npm install` — install dependencies
-- `npm run dev` — start the Vite dev server (http://localhost:5173)
-- `npm run build` — type-check (`vue-tsc --noEmit`) + production build
-- `npm run type-check` — type-check only
-- `npm run preview` — preview the production build
+- **`docs/04-roadmap.md` のフェーズに従って実装する。** 1 単位につき 1 つの概念とし、順序を飛ばさない。
+- **フェーズごとにコミットする。** Conventional Commits 形式（`feat:`、`docs:`、`chore:`、`refactor:`）。
+  `.planning/` のようなノイズは対象外とする。コミットは意図的に小さく、読みやすく保つ。
+- コミットおよびプッシュは、明示的に依頼された場合にのみ行う。
 
-## Toolchain constraints (do not "upgrade" past these)
+## コマンド
 
-- **TypeScript pinned to 5.x** (`^5`). TypeScript 7 (the native compiler) is out but `vue-tsc` 3 does
-  not support it yet — installing `typescript@latest` breaks the build (`./lib/tsc` not exported). Keep
-  TS on 5.x until `vue-tsc` announces TS 7 support.
-- **Pinia pinned to 3.x** (`^3`). Pinia `4.0.1` shipped a broken `exports` map (no `types` condition),
-  so TS can't resolve its declarations. Avoid 4.x until that packaging bug is fixed upstream.
+- `npm install` — 依存関係をインストールする
+- `npm run dev` — Vite の開発サーバーを起動する（http://localhost:5173）
+- `npm run build` — 型チェック（`vue-tsc --noEmit`）と本番ビルド
+- `npm run type-check` — 型チェックのみ
+- `npm run preview` — 本番ビルドをプレビューする
+
+## ツールチェーンの制約（これより新しいバージョンへ更新しない）
+
+- **TypeScript は 5.x に固定する**（`^5`）。TypeScript 7（ネイティブコンパイラ）は公開されているが、
+  `vue-tsc` 3 が未対応である。`typescript@latest` を導入するとビルドが失敗する（`./lib/tsc` が
+  export されていない）。`vue-tsc` が TypeScript 7 対応を告知するまでは 5.x を維持する。
+- **Pinia は 3.x に固定する**（`^3`）。Pinia `4.0.1` は `exports` マップに `types` 条件が欠けた状態で
+  公開されており、TypeScript が型定義を解決できない。この不具合が修正されるまで 4.x は使用しない。

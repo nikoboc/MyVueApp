@@ -1,48 +1,48 @@
-# 05 — TypeScript Coding Conventions
+# 05 — TypeScript コーディング規約
 
-Written for a Java engineer. The focus is where TS **differs** from Java or where its idioms surprise
-people with a statically-typed OO background. These are the rules we follow in this project; they're also
-enforced in spirit by `CLAUDE.md`.
+Java エンジニアを対象とした規約である。TypeScript が Java と異なる点、および静的型付けの
+オブジェクト指向の経験がある場合に誤解しやすい点を中心に扱う。ここに定めた規則は本プロジェクトで
+実際に適用するものであり、`CLAUDE.md` からも参照している。
 
-> **For AI assistants — mandatory.** Every rule in this document MUST be followed when writing or
-> changing code. Before proposing a commit, review each touched file against these conventions (and the
-> architecture rules in `CLAUDE.md`), fix any violations first, and note which rules you checked. Do not
-> commit code that violates them.
+> **AI アシスタントへ（必須）。** ここに定めた規則は、コードを記述または変更する際に必ず守ること。
+> コミットを提案する前に、変更したファイルを本規約および `CLAUDE.md` のアーキテクチャ規約と照合し、
+> 違反があれば先に修正すること。そのうえで、確認した規則を述べること。規約に違反したコードを
+> コミットしてはならない。
 
-## House rules (always follow — details below)
+## ハウスルール（常に適用する。詳細は後述）
 
-- **Be strict to types.** `strict` tsconfig stays on, no `any`, never silence an error — fix the type
-  (§1, §6).
-- **Comparisons read low-to-high: prefer `<` / `<=` over `>` / `>=`.** Put the smaller value on the left so
-  conditions read like a number line (§12).
-- **Always `===` / `!==`, never `==`** (§12).
-- **Use `const` by default**, `let` only when a binding is actually reassigned (§12).
-- **Prefer functional array methods** (`map` / `filter` / `reduce`) over imperative `for` loops (§13).
-- **JSDoc every function; comment the _why_, not the _what_** (§14).
+- **型を厳格に扱う。** `strict` は無効化せず、`any` も使用しない。エラーが発生した場合は、抑制する
+  のではなく型を修正する（§1、§6）。
+- **比較は小さい順に記述する。`>` `>=` ではなく `<` `<=` を使う。** 小さい値を左に置くと、条件式が
+  数直線と同じ並びになる（§12）。
+- **等値比較には `===` / `!==` を使う。`==` は使用しない**（§12）。
+- **既定は `const` とする。** 再代入が必要な場合にのみ `let` を使う（§12）。
+- **配列の処理には `map` / `filter` / `reduce` を用い、`for` ループは避ける**（§13）。
+- **関数には JSDoc を記述する。コメントには「何を」ではなく「なぜ」を書く**（§14）。
 
-## 0. The one big difference: structural typing
+## 0. 最大の相違点: 構造的部分型
 
-Java is **nominal** — a value fits a type only if it *declares* it (`implements Foo`). TypeScript is
-**structural** — a value fits a type if its *shape* matches, regardless of names. If it has the right
-fields, it's compatible. No `implements` needed.
+Java の型は**名前的**（nominal）であり、`implements Foo` と宣言してはじめてその型として扱われる。
+一方 TypeScript の型は**構造的**（structural）であり、型名に関係なく、構造が一致すれば適合する。
+必要なフィールドを備えていればよく、`implements` による宣言は不要である。
 
 ```ts
 interface Point { x: number; y: number }
 const p = { x: 1, y: 2, label: "a" }
-const q: Point = p   // ✅ OK — extra `label` is fine; shape includes x and y
+const q: Point = p   // ✅ 適合する。x と y を持つため、余分な label があっても問題ない
 ```
 
-Consequence: interfaces describe shapes, not contracts you must explicitly opt into. Lean on this.
+したがって TypeScript のインターフェースは、明示的に実装を宣言する契約ではなく、構造の記述である。
 
-## 1. tsconfig — strictness is mandatory
+## 1. tsconfig — 厳格な設定を必須とする
 
-Turn the safety all the way up. Our `tsconfig.json` sets:
+型チェックは最も厳格な設定で運用する。本プロジェクトの `tsconfig.json` は次のとおりである。
 
 ```jsonc
 {
   "compilerOptions": {
-    "strict": true,                       // the umbrella flag — always on
-    "noUncheckedIndexedAccess": true,     // arr[i] is T | undefined, not T (huge for correctness)
+    "strict": true,                       // 他の厳格化オプションをまとめて有効にする。常に有効
+    "noUncheckedIndexedAccess": true,     // arr[i] の型が T ではなく T | undefined になる
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": true,
     "noFallthroughCasesInSwitch": true
@@ -50,102 +50,109 @@ Turn the safety all the way up. Our `tsconfig.json` sets:
 }
 ```
 
-`strict` implies `strictNullChecks`, `noImplicitAny`, and more. **Never disable strictness to make an
-error go away** — fix the type. This is the whole point of using TS over JS.
+`strict` を有効にすると、`strictNullChecks` や `noImplicitAny` などが一括で有効になる。**エラーを
+解消する目的で厳格さを緩めてはならない。** 修正すべきなのは型のほうである。JavaScript ではなく
+TypeScript を採用している理由がここにある。
 
-## 2. Types vs. interfaces
+## 2. type と interface の使い分け
 
-- **`interface`** for object/domain shapes (our `Location`, `Forecast`, etc.). It's the closest thing to
-  a Java class-shape and supports declaration merging.
-- **`type`** for unions, primitives, tuples, function types, and mapped/utility compositions.
+- オブジェクトおよびドメインの構造には **`interface`** を用いる（`Location`、`Forecast` など）。
+  Java のクラスの構造に最も近く、宣言のマージにも対応する。
+- ユニオン、プリミティブ、タプル、関数型、ユーティリティ型の合成には **`type`** を用いる。
 
 ```ts
-interface Location { id: string; name: string }        // object shape
-type Units = "metric" | "imperial"                      // union — no `type` equivalent as interface
-type Coord = [number, number]                            // tuple
-type Fetcher = (loc: Location) => Promise<Forecast>      // function type
+interface Location { id: string; name: string }        // オブジェクトの構造
+type Units = "metric" | "imperial"                      // ユニオン。interface では表現できない
+type Coord = [number, number]                            // タプル
+type Fetcher = (loc: Location) => Promise<Forecast>      // 関数型
 ```
 
-**No `I` prefix** on interfaces (`ILocation` is a C#/some-Java-shop habit; the TS community uses plain
-`Location`). Type names are `PascalCase`. (Full naming rules: §16.)
+インターフェースに `I` は付けない。`ILocation` のような命名は C# や一部の Java 環境の慣習であり、
+TypeScript では `Location` と記述する。型名は `PascalCase` とする（命名規約は §16）。
 
-## 3. Prefer string-literal unions over `enum`
+## 3. `enum` ではなく文字列リテラルのユニオンを用いる
 
-Coming from Java you'll reach for `enum`. In TS, **prefer union types** — they're simpler, erase to plain
-strings at runtime, and need no import to use the values.
+Java の `enum` に相当する場面では、TypeScript ではユニオン型を用いる。構造が単純で、実行時には
+文字列として扱われ、値を使用する際に import も不要である。
 
 ```ts
-// ✅ preferred
+// ✅ 推奨
 type WeatherView = "hourly" | "daily"
 
-// ⚠️ avoid unless you truly need a runtime enum object
+// ⚠️ 実行時に enum オブジェクトが必要な場合を除き、使用しない
 enum WeatherViewEnum { Hourly, Daily }
 ```
 
-For a fixed set with a runtime value list, use `as const`:
+固定された集合を実行時にも値のリストとして保持する場合は `as const` を用いる。
 
 ```ts
 export const UNITS = ["metric", "imperial"] as const
 export type Units = (typeof UNITS)[number]   // "metric" | "imperial"
 ```
 
-## 4. Nullability: `undefined` is the default absence
+## 4. null と undefined — 既定の「値なし」は `undefined`
 
-Java has `null`. TS has **both** `null` and `undefined`, but idiomatic TS leans on `undefined` (missing
-property, no return). Use `null` only to mean "explicitly empty." In this project: **prefer `undefined`**;
-use `null` only where an API/domain value is meaningfully "cleared" (e.g. `error: string | null`).
+Java には `null` のみが存在するが、TypeScript には `null` と `undefined` の両方がある。TypeScript で
+一般的に用いられるのは `undefined` である（プロパティが存在しない、戻り値がない、など）。`null` は
+「意図的に空にした」ことを表す場合に限って用いる。本プロジェクトでは **`undefined` を基本**とし、
+`null` は値が意味的にクリアされた場合にのみ使用する（`error: string | null` など）。
 
 ```ts
 function find(id: string): Location | undefined { /* ... */ }
 
-const name = loc?.name ?? "Unknown"   // optional chaining + nullish coalescing
+const name = loc?.name ?? "不明"   // オプショナルチェーンと null 合体演算子
 ```
 
-- `?.` — optional chaining (short-circuits on null/undefined). Like a null-safe navigation.
-- `??` — nullish coalescing. Falls back **only** on null/undefined (not on `0` or `""`, unlike `||`).
-  Prefer `??` over `||` for defaults.
+- `?.` はオプショナルチェーンであり、null または undefined の時点で評価を打ち切る。null セーフな
+  ナビゲーションに相当する。
+- `??` は null 合体演算子である。フォールバックが働くのは null と undefined の場合のみで、`0` や
+  `""` では働かない。この点が `||` との違いであり、デフォルト値の指定には `??` を用いる。
 
-## 5. Annotate boundaries, infer the middle
+## 5. 境界に型を記述し、内部は推論に委ねる
 
-Java makes you type everything. TS has strong inference — over-annotating is noise.
+Java はすべての箇所に型の記述を要求するが、TypeScript の型推論は強力である。過剰な型注釈は
+かえって可読性を損なう。
 
-**Rule:** explicitly type **function parameters, return types, and exported/module-level API**. Let TS
-**infer local variables**.
+**方針は「境界には記述し、内部には記述しない」である。** 関数の引数と戻り値、および export する
+モジュールレベルの API には型を明示する。ローカル変数は推論に委ねる。
 
 ```ts
-// ✅ signature is explicit (the contract); locals are inferred
+// ✅ シグネチャ（＝契約）は明示し、ローカル変数は推論に委ねる
 export async function getForecast(loc: Location): Promise<Forecast> {
-  const url = buildUrl(loc)           // inferred string — no annotation needed
-  const res = await fetch(url)        // inferred Response
-  const json = await res.json()       // `any` — see §6, must be tamed
+  const url = buildUrl(loc)           // string と推論されるため、型注釈は不要
+  const res = await fetch(url)        // Response と推論される
+  const json = await res.json()       // any になる。§6 のとおり、そのままにはしない
   return mapForecast(json)
 }
 ```
 
-Explicit return types on exported functions are a deliberate rule: they document intent and stop an
-accidental refactor from silently changing a function's public type.
+export した関数に戻り値の型を明記するのは意図的な規則である。関数の意図が明確になり、リファクタ
+リングによって公開型が意図せず変化することも防げる。
 
-## 6. Ban `any`; use `unknown` at untyped boundaries
+## 6. `any` を禁止し、型のない境界では `unknown` を用いる
 
-`any` disables the type checker — it's a hole in the hull. `res.json()` returns `any`, so **tame it
-immediately**: treat external data as `unknown` and validate/narrow before use.
+`any` を使用すると、その箇所で型チェックが機能しなくなる。`res.json()` の戻り値は `any` であるため、
+受け取った直後に処理する。外部から取得したデータはいったん `unknown` として扱い、検証または
+絞り込みを経てから使用する。
 
 ```ts
 const json: unknown = await res.json()
-// then narrow: guard fields, or (pragmatically for this learning project) assert into a raw response type
+// この後に絞り込む。フィールドをガードするか、
+// 本プロジェクトでは学習用と割り切って生のレスポンス型にアサートする
 ```
 
-- `unknown` = "I don't know the type yet, force me to check." Safe.
-- `any` = "turn off checking here." Avoid. If you must, leave a `// eslint-disable` + a reason.
-- Type assertions (`x as Foo`) are an escape hatch, not a tool — they *assert* without *checking*. Prefer
-  real narrowing (type guards, `in`, `typeof`, `Array.isArray`). Use `as` only when you genuinely know
-  more than the compiler (e.g., a validated API DTO).
+- `unknown` は「型が未確定であり、使用前に確認を要する」ことを表す。安全側に倒した型である。
+- `any` は「その箇所で型チェックを無効化する」ことを意味するため使用しない。やむを得ない場合は
+  `// eslint-disable` と理由を併記する。
+- 型アサーション（`x as Foo`）は最終手段である。検証を伴わずに型を断定するにすぎないため、通常は
+  型ガードや `in`、`typeof`、`Array.isArray` による絞り込みを用いる。`as` を使うのは、検証済みの
+  API DTO のように、コンパイラより確実な情報を持っている場合に限る。
 
-## 7. Model state with discriminated unions
+## 7. 状態は判別可能なユニオンで表現する
 
-This is TS's superpower and worth learning early — it's the ergonomic version of Java sealed
-classes / `switch` over a sealed hierarchy. A shared literal field (the *discriminant*) lets the compiler
-narrow exhaustively.
+判別可能なユニオンは、TypeScript の型システムを最も活かせる機能の一つである。Java の sealed クラスに
+対するパターンマッチと同じ役割を、より簡潔に記述できる。共通のリテラルフィールド（*判別子*）を
+持たせることで、コンパイラが網羅的に型を絞り込む。
 
 ```ts
 type LoadState<T> =
@@ -157,20 +164,20 @@ type LoadState<T> =
 function render(s: LoadState<Forecast>) {
   switch (s.status) {
     case "idle":    return "—"
-    case "loading": return "Loading…"
-    case "success": return s.data.current.temperature   // TS knows `data` exists here
-    case "error":   return s.message                     // and `message` exists here
+    case "loading": return "読み込み中…"
+    case "success": return s.data.current.temperature   // この分岐では data の存在が保証される
+    case "error":   return s.message                     // この分岐では message が存在する
   }
 }
 ```
 
-Makes illegal states unrepresentable — you can't have `status: "success"` without `data`. Reach for this
-instead of a bag of loose booleans (`isLoading`, `hasError`, `data?`).
+この形式では、不正な状態そのものが表現できなくなる。`data` を持たない `status: "success"` は構築
+できない。`isLoading`、`hasError`、`data?` のような真偽値の組み合わせよりも、この表現を優先する。
 
-## 8. Immutability
+## 8. イミュータビリティ
 
-Default to immutable. Use `readonly` for fields that shouldn't change and `readonly T[]` /
-`ReadonlyArray<T>` for arrays you only read.
+既定ではイミュータブルとする。変更してはならないフィールドには `readonly` を、読み取り専用の配列には
+`readonly T[]` または `ReadonlyArray<T>` を用いる。
 
 ```ts
 interface Location {
@@ -179,88 +186,90 @@ interface Location {
 }
 ```
 
-## 9. Generics & utility types
+## 9. ジェネリクスとユーティリティ型
 
-Generics work like Java's (`<T>`), with the same variance intuitions mostly holding. Beyond that, TS ships
-**utility types** that transform existing types — learn these five, you'll use them constantly:
+ジェネリクスは Java の `<T>` とほぼ同等であり、変性の扱いもおおむね共通している。加えて TypeScript
+には、既存の型を変換する**ユーティリティ型**がある。次の 5 種類は使用頻度が高い。
 
-| Utility | Does | Example |
+| ユーティリティ | 効果 | 例 |
 |---------|------|---------|
-| `Partial<T>` | all fields optional | `Partial<Location>` for a patch |
-| `Pick<T, K>` | keep some fields | `Pick<Forecast, "current">` |
-| `Omit<T, K>` | drop some fields | `Omit<Location, "id">` for a "new location" input |
-| `Record<K, V>` | map/dictionary type | `Record<string, Forecast>` (our forecasts map) |
-| `Readonly<T>` | all fields readonly | `Readonly<Location>` |
+| `Partial<T>` | 全フィールドを省略可能にする | パッチ用の `Partial<Location>` |
+| `Pick<T, K>` | 一部のフィールドのみ残す | `Pick<Forecast, "current">` |
+| `Omit<T, K>` | 一部のフィールドを除外する | 新規地点の入力用の `Omit<Location, "id">` |
+| `Record<K, V>` | マップおよび辞書の型 | `Record<string, Forecast>`（本プロジェクトの forecasts） |
+| `Readonly<T>` | 全フィールドを readonly にする | `Readonly<Location>` |
 
-## 10. Modules & imports
+## 10. モジュールと import
 
-- ES modules only. Encapsulation is by **module boundary** — only `export`ed things are public. There are
-  no `private`/`public` on module members; if it's not exported, it's module-private.
-- Use **`import type`** for type-only imports so they're erased from the JS output:
+- ES モジュールのみを使用する。カプセル化はモジュール単位で行われ、`export` したものだけが外部に
+  公開される。メンバーに対する `private`/`public` は存在せず、export しなければモジュール内に閉じる。
+- 型のみを import する場合は **`import type`** を用いる。JavaScript の出力から除去されるためである。
 
 ```ts
 import type { Location, Forecast } from "@/types/weather"
 import { getForecast } from "@/services/weatherApi"
 ```
 
-- Use the `@/` path alias (configured in Vite/tsconfig) for `src/`-relative imports — no `../../..` chains.
+- `src/` 配下の import には `@/` のパスエイリアス（Vite および tsconfig で設定済み）を用い、
+  `../../..` の連鎖は記述しない。
 
-## 11. Async & error handling
+## 11. 非同期処理とエラー処理
 
-- Async is `Promise<T>` + `async`/`await` (conceptually like `CompletableFuture`, but syntactically clean).
-- In strict mode a `catch` binding is **`unknown`**, not `Error` — you must narrow before using it:
+- 非同期処理は `Promise<T>` と `async`/`await` で記述する。`CompletableFuture` に相当するが、記法は
+  より簡潔である。
+- strict モードでは `catch` が受け取る値の型が `Error` ではなく **`unknown`** になるため、使用前に
+  絞り込む必要がある。
 
 ```ts
 try {
   await getForecast(loc)
 } catch (e) {
-  const message = e instanceof Error ? e.message : "Unknown error"
+  const message = e instanceof Error ? e.message : "不明なエラー"
 }
 ```
 
-- Don't swallow errors silently; surface them into store state (`error.value = ...`) so the UI can react.
+- エラーを握りつぶさない。ストアの状態に反映し（`error.value = ...`）、UI が反応できるようにする。
 
-## 12. Operators, equality & style
+## 12. 演算子・等値比較・スタイル
 
-- **Always `===` / `!==`.** Never `==` (it does surprising coercion). This is non-negotiable.
-- **Use `const` by default.** Reach for `let` only when a binding is genuinely reassigned; never `var`.
-- Arrow functions for callbacks and inline functions. Beware `this` differs from Java — in `<script
-  setup>` and Pinia setup stores you rarely touch `this` at all.
+- **等値比較には `===` / `!==` を使う。** `==` は意図しない型変換を伴うため使用しない。例外は認めない。
+- **既定は `const` とする。** 再代入が必要な場合にのみ `let` を用い、`var` は使用しない。
+- コールバックおよびインライン関数にはアロー関数を用いる。`this` の挙動は Java と異なるが、
+  `<script setup>` および Pinia の setup ストアでは `this` を扱う場面はほとんどない。
 
-**Prefer `<` / `<=` over `>` / `>=`.** Order comparisons low-to-high so the smaller value sits on the left
-and the expression reads like a number line:
+**`>` `>=` ではなく `<` `<=` を用いる。** 小さい値を左に置き、式が数直線と同じ並びになるようにする。
 
 ```ts
 if (temperature < threshold) { /* ... */ }        // ✅
-if (0 <= i && i < items.length) { /* ... */ }      // ✅ bounds in natural left-to-right order
+if (0 <= i && i < items.length) { /* ... */ }      // ✅ 範囲の判定が左から右へ自然に読める
 
-if (threshold > temperature) { /* ... */ }         // ⚠️ avoid — same meaning, reads backwards
+if (threshold > temperature) { /* ... */ }         // ⚠️ 意味は同じだが、読む向きが逆になる
 ```
 
-## 13. Prefer functional array methods over loops
+## 13. ループではなく配列メソッドを用いる
 
-Coming from Java Streams this will feel familiar: transform data with declarative array methods rather than
-imperative `for` loops that push into a mutable accumulator. They read top-to-bottom, sidestep off-by-one
-and mutation bugs, and return new arrays (aligning with immutability, §8).
+Java の Stream に相当する記法である。配列に `push` していく `for` ループではなく、宣言的な配列
+メソッドでデータを変換する。処理の流れを上から順に追うことができ、添字の誤りや意図しない変更に
+起因するバグも避けられる。新しい配列を返すため、§8 のイミュータビリティとも整合する。
 
 ```ts
 const temperatures = [18, 22, 15, 27, 20]
 
-// ✅ functional — like a Java Stream pipeline, no mutable accumulator
+// ✅ Java の Stream パイプラインと同様に、途中経過を保持する変数を必要としない
 const warmLabels = temperatures
   .filter(t => 20 <= t)
   .map(t => `${t}°C`)
 
-// ⚠️ avoid the imperative version for simple transforms
+// ⚠️ 単純な変換にこの記法は用いない
 const warmLabels2: string[] = []
 for (const t of temperatures) {
   if (20 <= t) warmLabels2.push(`${t}°C`)
 }
 ```
 
-Java Stream → TS array method:
+Java Stream と TypeScript の配列メソッドの対応は次のとおりである。
 
-| Java Stream | TS array method |
+| Java Stream | TypeScript の配列メソッド |
 |-------------|-----------------|
 | `map` | `map` |
 | `filter` | `filter` |
@@ -269,120 +278,124 @@ Java Stream → TS array method:
 | `anyMatch` | `some` |
 | `allMatch` | `every` |
 | `flatMap` | `flatMap` |
-| `sorted` | `toSorted()` (immutable) or `[...arr].sort()` |
-| `collect(toList())` | (already an array) |
+| `sorted` | `toSorted()`（イミュータブル）または `[...arr].sort()` |
+| `collect(toList())` | （すでに配列である） |
 
-**When a plain loop is fine:** use `for...of` when you need `break` / `continue`, or a sequential `await`
-per item (you can't `await` cleanly inside `.forEach`). And don't twist `reduce` into an unreadable
-one-liner — clarity wins. But for straightforward map/filter/find work, the functional form is the default.
+**ループが適する場面もある。** `break` や `continue` を要する場合、および要素ごとに逐次 `await` する
+場合（`.forEach` の内部では `await` が正しく機能しない）は `for...of` を用いる。また、`reduce` を
+一行に詰め込んで可読性を損なうくらいであれば、ループのほうが望ましい。ただし単純な map/filter/find
+については、配列メソッドを既定とする。
 
-## 14. Documentation & comments
+## 14. ドキュメントとコメント
 
-**JSDoc every function** (exported ones especially). It's TS's Javadoc, and editors surface it on hover.
-Because the signature is already typed, **don't** repeat types in `@param` — document *meaning*, not types.
+**関数には JSDoc を記述する**（export するものは必須とする）。TypeScript における Javadoc に相当し、
+エディターがホバー時に表示する。型はシグネチャに記述されているため、`@param` で型を繰り返さない。
+記述するのは型ではなく*意味*である。
 
 ```ts
 /**
- * Fetches and normalizes the current, hourly, and daily forecast for a location.
+ * 指定した地点の現在・時間別・日別の予報を取得し、正規化する。
  *
- * @param loc - the geocoded location to fetch weather for
- * @returns the mapped domain forecast
- * @throws if the Open-Meteo request fails or returns an unexpected shape
+ * @param loc - ジオコーディング済みの、天気を取得する地点
+ * @returns マッピング後のドメインの予報データ
+ * @throws Open-Meteo へのリクエストが失敗した場合、または想定外の形式が返された場合
  */
 export async function getForecast(loc: Location): Promise<Forecast> { /* ... */ }
 ```
 
-**Comment properly — the _why_, not the _what_:**
+**コメントには「何を」ではなく「なぜ」を記述する。**
 
-- The code already says *what* it does; comments capture *intent*: why this approach, a tradeoff, a
-  non-obvious constraint, or an external quirk (e.g. "Open-Meteo omits `results` when there are no matches").
-- Keep comments **truthful and current**. A stale comment is worse than none — update or delete it when the
-  code changes.
-- Don't narrate the obvious (`// increment i`). If code needs a comment just to be understood, first ask
-  whether clearer names or a small refactor would remove the need.
-- `// TODO:` / `// FIXME:` are fine when they carry context, not as litter.
+- *何を*しているかはコードから読み取れる。コメントに記述するのは*意図*である。その方法を選んだ理由、
+  トレードオフ、自明でない制約、外部サービスの特性（例:「Open-Meteo は該当が無いと `results` 自体を
+  返さない」）などが対象となる。
+- コメントの内容は正確かつ最新の状態に保つ。古いコメントは無いよりも有害であるため、コードの変更に
+  合わせて修正または削除する。
+- 自明な内容は記述しない（`// i をインクリメント`）。コードの理解のためだけにコメントを要する場合は、
+  まず命名の見直しや処理の分割を検討する。
+- `// TODO:` `// FIXME:` は経緯を伴う場合に限り許容する。放置してはならない。
 
-## 15. Vue + TypeScript specifics
+## 15. Vue と TypeScript
 
-The project-relevant typing patterns you'll actually use:
+本プロジェクトで使用する型付けのパターンは次のとおりである。
 
 ```ts
-// Reactive refs carry their type:
-const count = ref<number>(0)                 // Ref<number>; often inferred from initial value
+// リアクティブな ref は型を保持する
+const count = ref<number>(0)                 // Ref<number>。初期値から推論される場合も多い
 const locations = ref<Location[]>([])
 
-// Typed props (compile-time, no runtime declaration needed):
+// 型付きの props。コンパイル時のみで、実行時の宣言は不要
 const props = defineProps<{ location: Location; compact?: boolean }>()
 
-// Typed emits:
+// 型付きの emit
 const emit = defineEmits<{ (e: "remove", id: string): void }>()
 
-// Pinia setup store — state/getters/actions are all inferred and fully typed
-// (see docs/03-state-and-data.md for the full store).
+// Pinia の setup ストア。state/getters/actions はすべて推論され、型が付与される
+// （ストア全体は docs/03-state-and-data.md を参照）
 ```
 
-Rule of thumb: annotate `ref`/`computed` when the initial value doesn't pin the type (e.g. `ref<Location[]>([])`
-or a ref that starts `null`); otherwise let inference do it.
+初期値だけでは型が確定しない場合（`ref<Location[]>([])` や `null` で初期化する ref など）は
+`ref`/`computed` に型を記述し、それ以外は推論に委ねる。
 
-## 16. Naming conventions
+## 16. 命名規約
 
-Consistent names make the codebase scannable. The casing rules below are the TypeScript community norm;
-most map cleanly from Java, with a few deltas called out at the end.
+命名が統一されていると、コードの見通しがよくなる。以下のケーシングは TypeScript コミュニティの
+標準であり、多くは Java から直接移行できる。相違点は末尾にまとめる。
 
-| Kind | Case | Example |
+| 種類 | ケース | 例 |
 |------|------|---------|
-| Variables, parameters, object properties | `camelCase` | `currentTemp`, `fetchedAt` |
-| Functions & methods | `camelCase`, verb-first | `getForecast`, `mapLocation`, `formatTime` |
-| Types, interfaces, classes, enums | `PascalCase` | `Location`, `Forecast`, `WeatherView` |
-| Enum members | `PascalCase` | `WeatherView.Hourly` |
-| Module-level true constants | `UPPER_SNAKE_CASE` | `MAX_LOCATIONS`, `DEFAULT_REFRESH_MS` |
-| Generic type parameters | `PascalCase`, descriptive | `TItem`, `TResponse` (or `T` when obvious) |
-| Vue components | `PascalCase` | `LocationCard.vue` |
-| Files (non-component) | see `CLAUDE.md` | `weatherApi.ts`, `useWeatherStore.ts` |
+| 変数、引数、オブジェクトのプロパティ | `camelCase` | `currentTemp`、`fetchedAt` |
+| 関数・メソッド | `camelCase`、動詞から始める | `getForecast`、`mapLocation`、`formatTime` |
+| 型、インターフェース、クラス、enum | `PascalCase` | `Location`、`Forecast`、`WeatherView` |
+| enum のメンバー | `PascalCase` | `WeatherView.Hourly` |
+| モジュールレベルの定数 | `UPPER_SNAKE_CASE` | `MAX_LOCATIONS`、`DEFAULT_REFRESH_MS` |
+| ジェネリック型引数 | `PascalCase`、意味の分かる名前 | `TItem`、`TResponse`（自明な場合は `T`） |
+| Vue コンポーネント | `PascalCase` | `LocationCard.vue` |
+| ファイル（コンポーネント以外） | `CLAUDE.md` を参照 | `weatherApi.ts`、`useWeatherStore.ts` |
 
-**Rules & nuances:**
+**個別の注意点は次のとおりである。**
 
-- **`camelCase` for values, `PascalCase` for types.** Familiar from Java — the difference is that TS puts
-  *interfaces* in `PascalCase` too, with no `I` prefix (§2).
-- **Constants:** reserve `UPPER_SNAKE_CASE` for genuine fixed constants (config, magic numbers lifted to a
-  name), like Java `static final`. A `const` that merely holds a local value stays `camelCase` —
-  `const url = ...`, not `URL`. So `const MAX_LOCATIONS = 8`, but `const forecast = await getForecast(loc)`.
-- **Booleans read like yes/no questions:** prefix with `is` / `has` / `should` / `can` — `isLoading`,
-  `hasData`, `shouldRefresh`. Avoid negatives (`isNotReady` → prefer `isReady`).
-- **Functions are verb-first:** `getForecast`, `buildUrl`, `mapCurrent`, `removeLocation`. Unlike Java
-  beans, idiomatic TS reads plain properties without a `get` prefix (`loc.name`, not `loc.getName()`) — but
-  functions that *do work* still start with a verb.
-- **No Hungarian / type prefixes:** no `I` on interfaces, no `T` on type aliases, no `str`/`arr` prefixes.
-  The type system already tells you the type.
-- **Avoid cryptic abbreviations.** `temperature` over `tmp`, `index` over `idx` (a short-lived loop `i` in
-  a tiny scope is fine). Names are documentation.
-- **Composables & stores** follow `CLAUDE.md`: `useX` (`useAutoRefresh`) and `useXStore`
-  (`useWeatherStore`). The `use` prefix is the Vue signal for "reactive/stateful hook."
-- **Emit event names** are verb-based and `kebab-case` at the call/handler site — `emit('remove', id)`
-  handled as `@remove`.
+- **値は `camelCase`、型は `PascalCase` とする。** Java とほぼ同じである。相違点は、*インターフェース*も
+  `PascalCase` とし、`I` を付けないことである（§2）。
+- **定数について。** `UPPER_SNAKE_CASE` を用いるのは真の固定値に限る（設定値、および名前を与えた
+  マジックナンバー）。Java の `static final` に相当する。ローカルの値を保持するだけの `const` は
+  `camelCase` のままとする。すなわち `const MAX_LOCATIONS = 8` は `UPPER_SNAKE` とするが、
+  `const forecast = await getForecast(loc)` は `camelCase` とする。
+- **真偽値は可否を問う形の名前とする。** `is` / `has` / `should` / `can` を接頭辞に用い、`isLoading`、
+  `hasData`、`shouldRefresh` のように命名する。否定形は避ける（`isNotReady` ではなく `isReady`）。
+- **関数は動詞から始める。** `getForecast`、`buildUrl`、`mapCurrent`、`removeLocation` などである。
+  Java Bean と異なり TypeScript ではプロパティを `get` なしで参照するが（`loc.getName()` ではなく
+  `loc.name`）、処理を伴う関数は動詞で始める。
+- **ハンガリアン記法および型の接頭辞は用いない。** インターフェースの `I`、型エイリアスの `T`、
+  `str`/`arr` などは付けない。型の情報は型システムが保持しているため、名前に含める必要はない。
+- **省略形による可読性の低下を避ける。** `tmp` ではなく `temperature`、`idx` ではなく `index` を
+  用いる（ごく狭いスコープのループ変数 `i` は許容する）。名前は仕様を伝える情報でもある。
+- **コンポーザブルとストア**は `CLAUDE.md` に従い、`useX`（`useAutoRefresh`）、`useXStore`
+  （`useWeatherStore`）とする。`use` は、リアクティブな状態を扱うことを示す Vue の慣習である。
+- **emit するイベント名**は動詞を基本とし、呼び出し側およびハンドラー側では `kebab-case` とする。
+  `emit('remove', id)` を `@remove` で受ける。
 
-**Java → TS naming deltas:**
+**Java との相違点は次のとおりである。**
 
-- Interfaces: Java's `IFoo` / `FooImpl` → plain `Foo` in TS (structural typing, §0).
-- Getters: Java `getName()` / `isActive()` → read the property directly in TS (`name`, `active`); only
-  functions that compute or fetch keep a verb.
-- Constants: Java `static final MAX` (`UPPER_SNAKE`) → identical in TS for true constants.
-- Packages/classes → files: `camelCase.ts` for modules, `PascalCase.vue` for components.
+- インターフェース: Java の `IFoo` / `FooImpl` は、TypeScript では `Foo` とする（構造的部分型による。§0）。
+- ゲッター: Java の `getName()` / `isActive()` は、TypeScript ではプロパティを直接参照する
+  （`name`、`active`）。動詞を保持するのは、計算または取得を伴う関数に限る。
+- 定数: Java の `static final MAX`（`UPPER_SNAKE`）は、真の定数であれば TypeScript でも同一である。
+- パッケージおよびクラス → ファイル: モジュールは `camelCase.ts`、コンポーネントは `PascalCase.vue` とする。
 
-## Java → TypeScript quick reference
+## Java → TypeScript 早見表
 
 | Java | TypeScript |
 |------|------------|
-| `interface`/class shape | `interface` (structural, no `implements` needed) |
-| `enum Color { RED }` | `type Color = "red" \| "green"` (union, preferred) |
-| `null` | `undefined` (default absence); `null` only for "explicitly empty" |
-| `Optional<T>` | `T \| undefined`, with `?.` and `??` |
-| `Objects.requireNonNull` / null checks | strict null checks do it at compile time |
-| `List<T>` | `T[]` or `Array<T>` |
-| `Map<K,V>` | `Record<K,V>` (object) or `Map<K,V>` (real Map) |
-| `sealed interface` + pattern switch | discriminated union + `switch` on discriminant |
-| generics `<T>` | generics `<T>` (near-identical) |
-| `final` | `const` (vars), `readonly` (fields) |
-| `==` (reference) / `.equals` | `===` (value for primitives) — always use `===` |
+| `interface`／クラスの構造 | `interface`（構造的部分型のため `implements` は不要） |
+| `enum Color { RED }` | `type Color = "red" \| "green"`（ユニオン。こちらを用いる） |
+| `null` | `undefined`（既定の「値なし」）。`null` は意図的に空にする場合のみ |
+| `Optional<T>` | `T \| undefined` と `?.`、`??` |
+| `Objects.requireNonNull`／null チェック | strict な null チェックによりコンパイル時に検出される |
+| `List<T>` | `T[]` または `Array<T>` |
+| `Map<K,V>` | `Record<K,V>`（オブジェクト）または `Map<K,V>`（Map インスタンス） |
+| `sealed interface` + パターンマッチの switch | 判別可能なユニオンと、判別子に対する `switch` |
+| ジェネリクス `<T>` | ジェネリクス `<T>`（ほぼ同一） |
+| `final` | `const`（変数）、`readonly`（フィールド） |
+| `==`（参照）／`.equals` | `===`（プリミティブは値の比較）。常に `===` を用いる |
 | `CompletableFuture<T>` | `Promise<T>` + `async`/`await` |
-| package-private / `private` | not exported from the module |
+| package-private／`private` | モジュールから export しない |

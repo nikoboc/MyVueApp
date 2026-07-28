@@ -1,32 +1,33 @@
-# 03 — State & Data
+# 03 — 状態とデータ
 
-This is the heart of the app. Get the store and the data models right and the components almost write
-themselves.
+本ドキュメントが扱う範囲がアプリケーションの中核である。ストアとデータモデルが確定すれば、
+コンポーネントの実装はほぼ自動的に決まる。
 
-## Typed domain models (`src/types/weather.ts`)
+## 型付きのドメインモデル（`src/types/weather.ts`）
 
-Define the shapes first — as a Java dev, this is your comfort zone and it pays off everywhere else.
+最初に構造を定義する。Java エンジニアにとっては馴染みのある作業であり、ここを固めることで後続の
+実装が容易になる。
 
 ```ts
-// A place the user searched for and added.
+// ユーザーが検索して追加した地点
 export interface Location {
-  id: string          // stable key for v-for, e.g. `${latitude},${longitude}`
-  name: string        // "Berlin"
-  country: string     // "Germany"
+  id: string          // v-for 用の一意なキー。`${latitude},${longitude}` の形式とする
+  name: string        // "東京都"
+  country: string     // "日本"
   latitude: number
   longitude: number
 }
 
-// Current conditions, normalized from the API response.
+// 現在の気象状況。API のレスポンスを正規化したもの
 export interface CurrentWeather {
   temperature: number
   humidity: number
   windSpeed: number
-  weatherCode: number // WMO code -> label/icon via weatherCodes.ts
-  time: string        // ISO timestamp from the API
+  weatherCode: number // WMO コード。weatherCodes.ts でラベルとアイコンに変換する
+  time: string        // API が返す ISO 形式のタイムスタンプ
 }
 
-// Parallel arrays (Chart.js-friendly): times[i] pairs with temperatures[i].
+// 添字が対応する配列（Chart.js に適した形式）。times[i] と temperatures[i] が対応する
 export interface HourlySeries {
   times: string[]
   temperatures: number[]
@@ -39,44 +40,51 @@ export interface DailySeries {
   weatherCodes: number[]
 }
 
-// Everything we hold for one location.
+// 1 地点について保持するデータ一式
 export interface Forecast {
   current: CurrentWeather
   hourly: HourlySeries
   daily: DailySeries
-  fetchedAt: number   // Date.now() when stored; drives "last updated"
+  fetchedAt: number   // 保存時点の Date.now()。最終更新の表示に用いる
 }
 ```
 
-## Open-Meteo API (`src/services/weatherApi.ts`)
+## Open-Meteo API（`src/services/weatherApi.ts`）
 
-Two endpoints, no API key, CORS-enabled. Official docs: https://open-meteo.com/en/docs
+使用するエンドポイントは 2 つである。API キーは不要で、CORS にも対応している。
+公式ドキュメント: https://open-meteo.com/en/docs
 
-### 1. Geocoding — city name → coordinates
+### 1. ジオコーディング（都市名 → 座標）
 
 ```
-GET https://geocoding-api.open-meteo.com/v1/search?name=Berlin&count=5&language=en&format=json
+GET https://geocoding-api.open-meteo.com/v1/search?name=Tokyo&count=5&language=ja&format=json
 ```
 
-Response (trimmed):
+レスポンス（抜粋）:
 
 ```json
 {
   "results": [
-    { "id": 2950159, "name": "Berlin", "latitude": 52.52, "longitude": 13.41,
-      "country": "Germany", "admin1": "Berlin" }
+    { "id": 1850147, "name": "東京都", "latitude": 35.6895, "longitude": 139.69171,
+      "country": "日本", "admin1": "東京都" }
   ]
 }
 ```
 
-> Note: when there are no matches, the API omits `results` entirely (the key is absent, not an empty
-> array). Handle that — `data.results ?? []`.
+> ⚠️ `language=ja` が影響するのは**返却されるラベル**のみであり、**検索クエリ**には影響しない。
+> Open-Meteo の検索インデックスは日本の都市を漢字およびひらがなで検索できないため、`name=東京` は
+> 0 件となる。ローマ字で `name=Tokyo` とすれば「東京都」が返る。外国の都市はカタカナでも検索できる
+> （`name=ベルリン` → 「ベルリン」）が、日本の都市は検索できない。この差異があるため、検索欄では
+> ローマ字入力を案内している。
 
-### 2. Forecast — coordinates → weather
+> 該当が 1 件も無い場合、API は `results` キー自体を返さない（空配列ではなく、キーが存在しない）。
+> 呼び出し側で対応する必要がある（`data.results ?? []`）。
+
+### 2. 予報（座標 → 天気）
 
 ```
 GET https://api.open-meteo.com/v1/forecast
-    ?latitude=52.52&longitude=13.41
+    ?latitude=35.6895&longitude=139.69171
     &current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code
     &hourly=temperature_2m
     &daily=temperature_2m_max,temperature_2m_min,weather_code
@@ -84,7 +92,7 @@ GET https://api.open-meteo.com/v1/forecast
     &forecast_days=7
 ```
 
-Response (trimmed):
+レスポンス（抜粋）:
 
 ```json
 {
@@ -108,49 +116,50 @@ Response (trimmed):
 }
 ```
 
-### Service shape
+### サービス層の役割
 
-The service returns **our** domain types, not the raw API JSON. Mapping (anti-corruption layer) lives
-here so the rest of the app never sees Open-Meteo's field names — the same reason you'd map a DTO to a
-domain object in Java.
+サービス層が返すのは生の API JSON ではなく、本アプリケーションのドメイン型である。変換（腐敗防止層）を
+ここに配置することで、他の層が Open-Meteo のフィールド名に依存しなくなる。Java において DTO を
+ドメインオブジェクトへ詰め替えるのと同じ理由による。
 
 ```ts
-export async function geocode(query: string): Promise<Location[]> { /* fetch + map */ }
-export async function getForecast(loc: Location): Promise<Forecast> { /* fetch + map */ }
+export async function geocode(query: string): Promise<Location[]> { /* 取得して変換する */ }
+export async function getForecast(loc: Location): Promise<Forecast> { /* 取得して変換する */ }
 ```
 
-Add a tiny `unit` note: request params can include `temperature_unit=fahrenheit`,
-`wind_speed_unit=mph` for the stretch unit-toggle feature.
+単位については、ストレッチ課題の単位切り替えにおいて、リクエストパラメーターに
+`temperature_unit=fahrenheit` や `wind_speed_unit=mph` を追加できる。
 
-### WMO weather codes (`src/services/weatherCodes.ts`)
+### WMO 天気コード（`src/services/weatherCodes.ts`）
 
-Open-Meteo uses [WMO codes](https://open-meteo.com/en/docs) (0 = clear, 1–3 = partly cloudy, 45/48 = fog,
-51–67 = rain, 71–77 = snow, 80–82 = showers, 95–99 = thunderstorm). A simple lookup map:
+Open-Meteo は天気を [WMO コード](https://open-meteo.com/en/docs)で返す（0 が快晴、1〜3 が晴れから
+くもり、45/48 が霧、51〜67 が雨、71〜77 が雪、80〜82 がにわか雨、95〜99 が雷雨）。変換用のマップを
+用意する。
 
 ```ts
 export const weatherCodes: Record<number, { label: string; icon: string }> = {
-  0: { label: "Clear sky", icon: "☀️" },
-  3: { label: "Overcast", icon: "☁️" },
-  // ...fill in the rest
+  0: { label: "快晴", icon: "☀️" },
+  3: { label: "くもり", icon: "☁️" },
+  // ...以下を埋める
 }
 ```
 
-## The Pinia store (`src/stores/useWeatherStore.ts`)
+## Pinia ストア（`src/stores/useWeatherStore.ts`）
 
-Pinia is where global reactive state lives. Mental model: **one store ≈ one singleton service bean** that
-holds state and exposes methods. Components inject it and call its actions.
+グローバルな状態を配置する場所が Pinia である。1 つのストアは、状態を保持しメソッドを公開する
+シングルトンのサービス Bean に相当する。コンポーネントはストアを取得し、そのアクションを呼び出す。
 
-### Anatomy
+### 構成
 
-Pinia (setup-style) has three parts:
+setup 形式の Pinia は 3 つの要素から構成される。
 
-| Part | Is | Java analogy |
+| 要素 | 実体 | Java における対応物 |
 |------|----|--------------|
-| **state** | reactive fields (`ref`) | the bean's instance fields |
-| **getters** | derived, cached values (`computed`) | cached getters / derived properties |
-| **actions** | methods, can be async, mutate state | the bean's service methods |
+| **state** | リアクティブなフィールド（`ref`） | Bean のインスタンスフィールド |
+| **getters** | キャッシュされる導出値（`computed`） | キャッシュ付きのゲッター |
+| **actions** | メソッド。非同期も可能で、状態を変更する | Bean のサービスメソッド |
 
-### Design
+### 設計
 
 ```ts
 import { defineStore } from "pinia"
@@ -161,16 +170,16 @@ import { geocode, getForecast } from "@/services/weatherApi"
 export const useWeatherStore = defineStore("weather", () => {
   // ---- state ----
   const locations = ref<Location[]>([])
-  const forecasts = ref<Record<string, Forecast>>({})   // keyed by location.id
-  const loadingIds = ref<Set<string>>(new Set())         // which cards are fetching
+  const forecasts = ref<Record<string, Forecast>>({})   // location.id をキーとする
+  const loadingIds = ref<Set<string>>(new Set())         // 取得中のカード
   const error = ref<string | null>(null)
 
   // ---- getters (computed) ----
-  // e.g. const hasLocations = computed(() => locations.value.length > 0)
+  // 例: const hasLocations = computed(() => locations.value.length > 0)
 
   // ---- actions ----
   async function addLocation(loc: Location) {
-    if (forecasts.value[loc.id]) return          // dedupe
+    if (forecasts.value[loc.id]) return          // 重複を防ぐ
     locations.value.push(loc)
     await refreshLocation(loc.id)
   }
@@ -183,7 +192,7 @@ export const useWeatherStore = defineStore("weather", () => {
     try {
       forecasts.value[id] = await getForecast(loc)
     } catch (e) {
-      error.value = `Failed to load ${loc.name}`
+      error.value = `${loc.name}の読み込みに失敗しました`
     } finally {
       loadingIds.value.delete(id)
     }
@@ -203,28 +212,34 @@ export const useWeatherStore = defineStore("weather", () => {
 })
 ```
 
-### Why the store owns the API calls, not the components
+> 実装上の補足: 上記の重複チェックは `forecasts` を参照しているが、実際の
+> `src/stores/useWeatherStore.ts` では `locations` を参照するよう修正している。取得に失敗した地点は
+> `forecasts` にエントリーを持たないため、`forecasts` を基準にすると同一の都市を二重に追加できて
+> しまう。理由はコード側のコメントに記載している。
 
-- **Single source of truth.** Every card reads from the same `forecasts` map. No duplicated fetching.
-- **Testability.** The store's logic can be tested without mounting components.
-- **Reactivity for free.** Assigning `forecasts.value[id] = ...` notifies every component reading it.
+### API 呼び出しをコンポーネントではなくストアに配置する理由
 
-> ⚠️ Reactivity gotcha for later: when you need Vue to react to *adding a new key* on an object, assign a
-> new value (as above) rather than mutating deeply. With `ref<Record<...>>`, `forecasts.value[id] = x`
-> works because you're reading `.value`. Just be aware object/array reactivity has edge cases — we'll hit
-> one and learn it.
+- **状態が一箇所に集約される。** すべてのカードが同一の `forecasts` を参照するため、取得処理が重複しない。
+- **テストが容易になる。** ストアのロジックは、コンポーネントをマウントせずにテストできる。
+- **リアクティビティが自動的に働く。** `forecasts.value[id] = ...` の代入により、参照している
+  すべてのコンポーネントへ変更が伝播する。
 
-## Auto-refresh strategy
+> ⚠️ 注意点として、オブジェクトへの新しいキーの追加を Vue に認識させる場合は、深い階層を変更するのでは
+> なく、上記のように値を代入する。`ref<Record<...>>` において `forecasts.value[id] = x` が機能するのは、
+> `.value` を経由して参照しているためである。オブジェクトおよび配列のリアクティビティには例外的な
+> 挙動も存在する。
 
-- A timer (`setInterval`) calls `refreshAll()` every N minutes (default 10 — weather doesn't change fast,
-  and it's polite to the free API).
-- The timer is set up in `App.vue`'s `onMounted` and **cleared in `onUnmounted`**. Forgetting cleanup is
-  the #1 beginner memory-leak bug — we'll extract it into a `useAutoRefresh` composable (a reusable
-  function that encapsulates the setup+teardown) as a deliberate lesson.
-- Each `Forecast` carries `fetchedAt`, so each card can show "updated 3 min ago" reactively.
+## 自動更新の方針
 
-## Settings store (stretch — `src/stores/useSettingsStore.ts`)
+- `setInterval` により N 分ごとに `refreshAll()` を呼び出す（既定は 10 分。天気の変化は緩やかであり、
+  無料 API への負荷も抑えられる）。
+- タイマーは `App.vue` の `onMounted` で開始し、**`onUnmounted` で破棄する**。クリーンアップの漏れは
+  メモリリークにつながるため、これを学習項目として `useAutoRefresh` コンポーザブル（開始と破棄をまとめた
+  再利用可能な関数）へ切り出す。
+- 各 `Forecast` が `fetchedAt` を保持するため、カードごとに「3 分前に更新」といった表示が可能となる。
 
-A second, tiny store for `units` (`"metric" | "imperial"`) and `theme`. Demonstrates **cross-store
-reactivity**: when units change, the weather store's fetches use the new unit params, or components
-re-derive displayed values. This is the payoff of centralized state — one toggle, whole app reacts.
+## 設定ストア（ストレッチ — `src/stores/useSettingsStore.ts`）
+
+`units`（`"metric" | "imperial"`）と `theme` を保持する 2 つ目のストアである。ストア間の
+リアクティビティの例となる。単位が変更されると、天気ストアが新しい単位で再取得するか、コンポーネントが
+表示値を再計算する。切り替え 1 つでアプリケーション全体が反応する点が、状態を集約したことの利点である。

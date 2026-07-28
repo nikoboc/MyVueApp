@@ -1,93 +1,91 @@
-# 04 — Roadmap
+# 04 — ロードマップ
 
-Each phase is a small, runnable increment that teaches **one** Vue concept. Don't skip ahead — the
-value is in feeling each concept land before adding the next.
+各フェーズは、単体で動作する最小の単位であると同時に、1 つの Vue の概念に対応している。順序を飛ばさず、
+各概念を理解したうえで次に進む。
 
-## Phase 0 — Scaffold & "hello reactive"
+## フェーズ 0 — 環境構築とリアクティビティの確認
 
-**Goal:** a running Vite + Vue 3 + TS app with Pinia installed.
+**目標:** Pinia を組み込んだ Vite + Vue 3 + TypeScript のアプリケーションが動作すること。
 
-- `npm create vite@latest` → Vue + TS template.
-- Install `pinia`, `chart.js`, `vue-chartjs`.
-- Wire Pinia in `main.ts`.
-- Throwaway counter in `App.vue` to *see* reactivity: a `ref`, a button, a `computed`.
+- `npm create vite@latest` で Vue + TypeScript のテンプレートを生成する。
+- `pinia`、`chart.js`、`vue-chartjs` をインストールする。
+- `main.ts` で Pinia を組み込む。
+- リアクティビティを確認するため、`App.vue` に一時的なカウンターを実装する（`ref`、ボタン、`computed`）。
 
-**Learn:** project structure, `<script setup>`, `ref`, `computed`, `v-on`/`@click`, `{{ }}` interpolation.
-**Done when:** `npm run dev` shows a counter that updates live.
+**習得対象:** プロジェクト構成、`<script setup>`、`ref`、`computed`、`v-on`/`@click`、`{{ }}` による補間。
+**完了条件:** `npm run dev` でカウンターが表示され、値が即座に更新される。
 
-## Phase 1 — Types & service layer (no UI)
+## フェーズ 1 — 型とサービス層（UI なし）
 
-**Goal:** the plumbing, unit-testable, zero Vue.
+**目標:** Vue に依存しない、単体テスト可能な基盤を構築すること。
 
-- Write `types/weather.ts`.
-- Write `services/weatherApi.ts` (`geocode`, `getForecast`) with DTO→domain mapping.
-- Verify by calling them from a scratch script or a temporary button that `console.log`s results.
+- `types/weather.ts` を作成する。
+- `services/weatherApi.ts`（`geocode`、`getForecast`）を、DTO からドメインへの変換を含めて実装する。
+- 動作確認は、一時的なスクリプトまたは結果を `console.log` するボタンで行う。
 
-**Learn:** TypeScript interfaces, `fetch`, async/await, mapping API JSON to domain types.
-**Done when:** you can log real Berlin weather to the console.
+**習得対象:** TypeScript のインターフェース、`fetch`、async/await、API の JSON からドメイン型への変換。
+**完了条件:** 実際のベルリンの天気をコンソールに出力できる。
 
-## Phase 2 — The Pinia store
+## フェーズ 2 — Pinia ストア
 
-**Goal:** state + actions wired to the service.
+**目標:** 状態とアクションをサービス層に接続すること。
 
-- Build `useWeatherStore` per doc 03.
-- No polished UI yet — a bare input + button that calls `addLocation`, and a `<pre>` dumping the store
-  state so you can watch it change.
+- ドキュメント 03 に従って `useWeatherStore` を実装する。
+- UI は未整備でよい。`addLocation` を呼び出す入力欄とボタン、および状態の変化を確認するための `<pre>`
+  （ストアの内容をそのまま出力する）があれば足りる。
 
-**Learn:** `defineStore`, state/getters/actions, how a component reads a store, reactivity across the boundary.
-**Done when:** typing a city and clicking "add" fills the store, visibly.
+**習得対象:** `defineStore`、state/getters/actions、コンポーネントからのストアの参照、境界を越えたリアクティビティ。
+**完了条件:** 都市を入力して追加すると、ストアが更新される様子を画面上で確認できる。
 
-## Phase 3 — Components: search + card
+## フェーズ 3 — コンポーネント（検索とカード）
 
-**Goal:** real UI, props down / events up.
+**目標:** UI を実装し、props down / events up を適用すること。
 
-- `LocationSearch.vue` — `v-model` on the input, geocoding dropdown, emits/calls `addLocation`.
-- `LocationCard.vue` + `CurrentConditions.vue` — receive a location via **props**, read its forecast from
-  the store, render current conditions with the weather-code lookup.
-- `v-for` over `store.locations` in `App.vue`, with `:key`.
-- `BaseSpinner.vue` + loading/error states.
+- `LocationSearch.vue` — 入力欄への `v-model`、ジオコーディングのドロップダウン、`addLocation` の呼び出し。
+- `LocationCard.vue` および `CurrentConditions.vue` — 地点を **props** で受け取り、予報はストアから参照し、
+  天気コードを変換して現在の気象状況を描画する。
+- `App.vue` で `store.locations` を `v-for` し、`:key` を付与する。
+- `BaseSpinner.vue` と、ローディングおよびエラーの表示。
 
-**Learn:** `v-model`, props, `defineProps`, `emit`, `v-for` + keys, `v-if`/`v-else`, component composition.
-**Done when:** search a city → a card appears with live current conditions.
+**習得対象:** `v-model`、props、`defineProps`、`emit`、`v-for` とキー、`v-if`/`v-else`、コンポーネントの合成。
+**完了条件:** 都市を検索すると、現在の気象状況を含むカードが表示される。
 
-## Phase 4 — Charts
+## フェーズ 4 — グラフ
 
-**Goal:** reactive data into a third-party lib.
+**目標:** リアクティブなデータを外部ライブラリへ受け渡すこと。
 
-- `HourlyChart.vue` — a `vue-chartjs` `<Line>` fed the `HourlySeries` from the store.
-- Make it **react**: when the forecast refreshes, the chart updates (watch the prop / pass reactive data).
+- `HourlyChart.vue` — ストアから受け取った `HourlySeries` を `vue-chartjs` の `<Line>` に渡す。
+- データの更新に応じてグラフも更新されるようにする（prop の監視、またはリアクティブなデータの受け渡し）。
 
-**Learn:** integrating non-Vue libraries, passing reactive data as props, reacting to prop changes.
-**Done when:** each card shows a 24h temperature line that updates on refresh.
+**習得対象:** Vue 以外のライブラリとの統合、リアクティブなデータの props による受け渡し、prop の変更への追随。
+**完了条件:** 各カードに 24 時間分の気温グラフが表示され、更新のたびに再描画される。
 
-## Phase 5 — Auto-refresh & polish
+## フェーズ 5 — 自動更新と仕上げ
 
-**Goal:** make it feel "live," learn lifecycle + cleanup.
+**目標:** 定期的な更新を実装し、ライフサイクルとクリーンアップを習得すること。
 
-- Interval polling via a `useAutoRefresh` composable; set up in `onMounted`, tear down in `onUnmounted`.
-- "Updated N min ago" per card (reactive, derived from `fetchedAt`).
-- Remove-location button; empty state.
+- `useAutoRefresh` コンポーザブルによる定期取得。`onMounted` で開始し、`onUnmounted` で破棄する。
+- カードごとの「N 分前に更新」の表示（`fetchedAt` から導出する）。
+- 地点の削除ボタン、および地点が存在しない場合の表示。
 
-**Learn:** `onMounted`/`onUnmounted`, `watch`, composables (reusable stateful logic), timer cleanup.
-**Done when:** cards refresh on their own and show a live "last updated"; no console warnings on add/remove.
+**習得対象:** `onMounted`/`onUnmounted`、`watch`、コンポーザブル（再利用可能な状態付きロジック）、タイマーのクリーンアップ。
+**完了条件:** カードが自動的に更新され、最終更新の表示も追随する。追加・削除時にコンソールへ警告が出力されない。
 
-## Phase 6 — Stretch goals (pick what interests you)
+## フェーズ 6 — ストレッチ課題（任意に選択する）
 
-- **7-day daily chart** (`DailyChart.vue`) — more Chart.js reps.
-- **Unit toggle** via `useSettingsStore` — cross-store reactivity.
-- **`localStorage` persistence** — restore city list on reload (a `watch` that saves, load on init).
-- **Dark mode** — reactive theming.
-- **Drag-to-reorder** cards.
-- **Tests** — Vitest on the service layer and store (plays to your testing instincts).
+- **7 日間の日別グラフ**（`DailyChart.vue`）— Chart.js の追加練習。
+- `useSettingsStore` による**単位の切り替え** — ストア間のリアクティビティ。
+- **`localStorage` への永続化** — リロード時の都市リストの復元（保存用の `watch` と、初期化時の読み込み）。
+- **ダークモード** — テーマの切り替え。
+- カードの**ドラッグによる並べ替え**。
+- **テスト** — サービス層とストアに対する Vitest の導入。
 
 ---
 
-## Suggested working rhythm
+## 進め方
 
-1. Read the relevant section of docs 02–03 for the phase.
-2. Build the smallest version that runs.
-3. Break it on purpose once (e.g., mutate state the "Java way" and watch it *not* update) — the failures
-   teach reactivity faster than the successes.
-4. Commit per phase. Small commits = a readable learning history.
-
-When you're ready, say the word and I'll scaffold **Phase 0** and we'll get a reactive counter on screen.
+1. 対象フェーズに関係するドキュメント 02〜03 の該当箇所を読む。
+2. 動作する最小限の実装を行う。
+3. 意図的に動作を壊してみる。たとえば状態を Java と同じ感覚で変更し、画面が更新されないことを確認する。
+   リアクティビティは、成功例よりも失敗例のほうが理解につながる。
+4. フェーズごとにコミットする。小さなコミットの蓄積が、そのまま学習の記録となる。

@@ -1,55 +1,56 @@
-# 01 — Overview
+# 01 — 概要
 
-## Vision
+## 目的
 
-A single-page dashboard that shows **live weather for one or more locations**. You search for a city,
-it appears as a card with current conditions, and charts show the hourly and daily forecast. The data
-refreshes on an interval so the dashboard feels "live."
+複数の地点の天気をまとめて表示するシングルページのダッシュボードを構築する。都市名で検索すると
+該当の都市がカードとして追加され、現在の気象状況と、時間別・日別の気温グラフが表示される。データは
+一定間隔で更新されるため、画面は常に最新の状態に保たれる。
 
-## Primary user story
+## 中心となるユーザーストーリー
 
-> As a user, I type a city name, and I immediately see its current weather plus a temperature chart for
-> the next 24 hours and the next 7 days. I can add several cities and watch them update automatically.
+> 都市名を入力すると、その都市の現在の天気と、24 時間分および 7 日分の気温グラフが即座に表示される。
+> 複数の都市を登録しておけば、それぞれが自動的に更新される。
 
-## Features
+## 機能
 
-### MVP (build this first)
+### MVP（最初に実装する範囲）
 
-1. **Location search** — type a city, pick from matches (Open-Meteo geocoding), add it to the dashboard.
-2. **Current conditions card** — temperature, humidity, wind, a weather-code → icon/label mapping.
-3. **Hourly temperature chart** — next 24h line chart (Chart.js).
-4. **Multiple locations** — add/remove cities; each renders its own card.
-5. **Auto-refresh** — poll every N minutes; a visible "last updated" timestamp.
-6. **Loading & error states** — every async fetch shows a spinner and handles failure gracefully.
+1. **地点検索** — 都市名を入力し、候補から選択してダッシュボードに追加する（Open-Meteo のジオコーディング）。
+2. **現在の気象状況カード** — 気温、湿度、風速、および天気コードから変換したアイコンとラベル。
+3. **時間別の気温グラフ** — 24 時間分の折れ線グラフ（Chart.js）。
+4. **複数地点** — 都市の追加と削除。それぞれが独立したカードとして描画される。
+5. **自動更新** — N 分ごとに再取得し、最終更新の時刻を表示する。
+6. **ローディングとエラーの表示** — 非同期の取得ではスピナーを表示し、失敗時も適切に処理する。
 
-### Stretch (once the MVP clicks)
+### ストレッチ（MVP の完了後）
 
-- **7-day daily chart** — high/low temperature per day.
-- **Unit toggle** — °C/°F, km/h / mph — a great exercise in a global setting flowing through the store.
-- **Persistence** — save the user's city list to `localStorage` and restore on reload.
-- **Favorite / reorder** — drag to reorder cards.
-- **Dark mode** — a reactive theme toggle.
+- **7 日間の日別グラフ** — 日ごとの最高気温と最低気温。
+- **単位の切り替え** — °C/°F、km/h / mph。グローバルな設定がストアを介してアプリ全体へ伝播する仕組みの題材となる。
+- **永続化** — 都市リストを `localStorage` に保存し、リロード時に復元する。
+- **お気に入りと並べ替え** — ドラッグによるカードの並べ替え。
+- **ダークモード** — テーマの切り替え。
 
-## Scope & non-goals
+## 対象範囲と対象外
 
-**In scope:** frontend only, client-side state, one third-party API, charts, polling.
+**対象範囲:** フロントエンドのみ。クライアント側の状態管理、外部 API 1 つ、グラフ、定期的な取得。
 
-**Explicitly NOT in scope (keeps the learning focused):**
+**対象外とするもの（学習対象を限定するため）:**
 
-- No custom backend. Open-Meteo is called directly from the browser (it allows CORS and needs no key).
-- No auth / user accounts.
-- No database. Persistence, if any, is `localStorage`.
-- No true WebSocket streaming — "real-time" here means interval polling, which is what free weather
-  APIs support anyway.
+- 独自のバックエンドは構築しない。Open-Meteo はブラウザから直接呼び出す（CORS が許可されており、
+  API キーも不要である）。
+- 認証およびユーザーアカウントは扱わない。
+- データベースは使用しない。永続化する場合も `localStorage` までとする。
+- WebSocket によるストリーミングは行わない。ここでの「リアルタイム」は一定間隔での取得を指す。
+  無料の天気 API が提供する範囲も同様である。
 
-## Why this is a good Vue teacher
+## 題材として適している理由
 
-| Feature | Vue concept it forces you to learn |
+| 機能 | 習得対象となる Vue の概念 |
 |---------|-------------------------------------|
-| Search box → results | Two-way binding (`v-model`), event handling |
-| Current conditions card | Props, computed properties, conditional rendering (`v-if`) |
-| City list | List rendering (`v-for`), keys, component composition |
-| Fetch on add | Lifecycle (`onMounted`), async actions |
-| Auto-refresh | `watch`, timers, cleanup on unmount |
-| Shared city list + units | **Pinia** — global reactive state across components |
-| Charts | Passing reactive data into a third-party library and reacting to changes |
+| 検索ボックスと結果の表示 | 双方向バインディング（`v-model`）、イベント処理 |
+| 現在の気象状況カード | props、算出プロパティ、条件付きレンダリング（`v-if`） |
+| 都市の一覧 | リストレンダリング（`v-for`）、キー、コンポーネントの合成 |
+| 追加時のデータ取得 | ライフサイクル（`onMounted`）、非同期のアクション |
+| 自動更新 | `watch`、タイマー、アンマウント時のクリーンアップ |
+| 都市リストと単位の共有 | **Pinia**（コンポーネント間で共有するグローバルな状態） |
+| グラフ | 外部ライブラリへのリアクティブなデータの受け渡しと、変更への追随 |

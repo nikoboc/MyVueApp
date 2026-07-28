@@ -1,76 +1,76 @@
-# 02 — Architecture
+# 02 — アーキテクチャ
 
-## Tech stack
+## 技術スタック
 
-| Layer | Choice | Java-world analogy |
+| レイヤー | 採用技術 | Java における対応物 |
 |-------|--------|--------------------|
-| Build / dev server | **Vite** | Maven/Gradle + hot-reload dev server, but instant |
-| Language | **TypeScript** | Java's static typing — your safety net |
-| UI framework | **Vue 3** (Composition API, `<script setup>`) | A view + reactivity engine |
-| State | **Pinia** | A set of `@Service`/singleton beans holding app state |
-| HTTP | **`fetch`** (wrapped in a small service) | `RestTemplate` / `HttpClient` |
-| Charts | **Chart.js** via `vue-chartjs` | A reporting/charting library |
+| ビルド・開発サーバー | **Vite** | Maven/Gradle とホットリロード対応の開発サーバー |
+| 言語 | **TypeScript** | Java の静的型付け |
+| UI フレームワーク | **Vue 3**（Composition API、`<script setup>`） | ビューとリアクティビティのエンジン |
+| 状態管理 | **Pinia** | 状態を保持する `@Service`／シングルトン Bean |
+| HTTP | **`fetch`**（サービス層でラップする） | `RestTemplate` / `HttpClient` |
+| グラフ | **Chart.js**（`vue-chartjs` 経由） | 帳票・チャート作成ライブラリ |
 
-We keep dependencies minimal on purpose. No UI component library, no router yet (single page). Add them
-later if a feature needs them.
+依存関係は意図的に最小限としている。UI コンポーネントライブラリは導入せず、画面が単一であるため
+ルーターも使用しない。必要が生じた時点で追加する。
 
-## Project layout
+## ディレクトリ構成
 
 ```
 src/
-  main.ts                  # app entry: create app, install Pinia, mount
-  App.vue                  # root component; overall layout
-  assets/                  # css, static
+  main.ts                  # エントリポイント。app の生成、Pinia の install、mount
+  App.vue                  # ルートコンポーネント。全体のレイアウト
+  assets/                  # CSS、静的ファイル
   types/
-    weather.ts             # TypeScript interfaces for API data & domain models
+    weather.ts             # API データおよびドメインモデルの型定義
   services/
-    weatherApi.ts          # Open-Meteo calls (geocoding + forecast). No Vue in here.
-    weatherCodes.ts        # WMO weather-code → label/icon lookup
+    weatherApi.ts          # Open-Meteo の呼び出し（ジオコーディングと予報）。Vue を含めない
+    weatherCodes.ts        # WMO 天気コードからラベルとアイコンへの変換
   stores/
-    useWeatherStore.ts     # Pinia store: locations, forecasts, actions, refresh
-    useSettingsStore.ts    # Pinia store: units, theme (stretch)
+    useWeatherStore.ts     # Pinia ストア。地点、予報、アクション、更新
+    useSettingsStore.ts    # Pinia ストア。単位、テーマ（ストレッチ）
   components/
-    LocationSearch.vue     # search input + results dropdown
-    LocationCard.vue       # one city: current conditions + its charts
-    CurrentConditions.vue  # temp/humidity/wind readout
-    HourlyChart.vue        # 24h line chart
-    DailyChart.vue         # 7-day chart (stretch)
-    BaseSpinner.vue        # reusable loading indicator
+    LocationSearch.vue     # 検索入力と結果のドロップダウン
+    LocationCard.vue       # 1 都市分。現在の気象状況とグラフ
+    CurrentConditions.vue  # 気温・湿度・風速の表示
+    HourlyChart.vue        # 24 時間の折れ線グラフ
+    DailyChart.vue         # 7 日間のグラフ（ストレッチ）
+    BaseSpinner.vue        # 再利用可能なローディング表示
   composables/
-    useAutoRefresh.ts      # reusable interval logic with cleanup (stretch)
+    useAutoRefresh.ts      # クリーンアップを含む、再利用可能な定期実行処理（ストレッチ）
 ```
 
-**Design principle — keep Vue out of the service layer.** `services/` and `types/` are plain TypeScript
-with zero Vue imports. They could be unit-tested or reused in any project. Vue's reactivity lives in the
-stores and components. This separation will feel familiar: it's the same instinct as keeping your
-domain/service layer independent of the web framework.
+**設計方針: サービス層に Vue を含めない。** `services/` と `types/` は Vue を一切 import しない純粋な
+TypeScript とする。単体テストが可能であり、他のプロジェクトへの再利用もできる。Vue のリアクティビティが
+関与するのは、ストアとコンポーネントに限られる。ドメイン層およびサービス層を Web フレームワークから
+分離する考え方と同一である。
 
-## Component tree
+## コンポーネントツリー
 
 ```
 App.vue
-├── LocationSearch.vue        (adds a city to the store)
-└── v-for over store.locations:
+├── LocationSearch.vue        (都市をストアに追加する)
+└── store.locations を v-for:
     └── LocationCard.vue      (props: location)
-        ├── CurrentConditions.vue   (props: current data)
-        ├── HourlyChart.vue         (props: hourly series)
-        └── DailyChart.vue          (props: daily series)   ← stretch
+        ├── CurrentConditions.vue   (props: 現在のデータ)
+        ├── HourlyChart.vue         (props: 時間別データ)
+        └── DailyChart.vue          (props: 日別データ)   ← ストレッチ
 ```
 
-Components are **dumb / presentational** wherever possible: they receive data via **props** and emit
-**events** upward. They do not call the API directly — they ask the store. This is the classic
-"props down, events up" rule and it's what keeps a Vue app debuggable.
+コンポーネントは可能な限り表示に専念させる。データは **props** で受け取り、上位へは**イベント**で
+伝達する。API を直接呼び出すことはせず、ストアに委譲する。これが「props down, events up」の原則であり、
+Vue アプリケーションの追跡可能性を支えている。
 
-## Data flow
+## データフロー
 
-The core loop — read this until it's second nature:
+中核となる処理の流れを次に示す。
 
 ```
                     ┌─────────────────────────────┐
-   user types city  │        LocationSearch        │
-  ─────────────────▶│  calls store.addLocation()   │
+   ユーザーが都市を入力  │        LocationSearch        │
+  ─────────────────▶│  store.addLocation() を呼ぶ    │
                     └───────────────┬──────────────┘
-                                    │ action
+                                    │ アクション
                                     ▼
         ┌───────────────────────────────────────────────┐
         │              useWeatherStore (Pinia)           │
@@ -78,25 +78,27 @@ The core loop — read this until it's second nature:
         │  action addLocation():                         │
         │     → weatherApi.geocode()                     │
         │     → weatherApi.getForecast()                 │
-        │     → mutate state (reactive!)                 │
+        │     → 状態を変更（リアクティブ）                   │
         └───────────────┬───────────────────────────────┘
-                        │ state changes are reactive
+                        │ 状態の変更が自動的に伝播する
                         ▼
         ┌───────────────────────────────────────────────┐
-        │  Components read store state and RE-RENDER      │
-        │  automatically. You never touch the DOM.        │
+        │  コンポーネントはストアの状態を読み、自動的に         │
+        │  再描画される。DOM を直接操作することはない。        │
         └───────────────────────────────────────────────┘
 ```
 
-The key idea: **components never mutate state directly and never call the API directly.** They trigger
-**actions**; actions do the async work and mutate state; the reactive system repaints. One direction,
-always. When something looks wrong on screen, you inspect the store — not the DOM.
+重要な点は、**コンポーネントが状態を直接変更せず、API も直接呼び出さない**ことである。コンポーネントが
+行うのはアクションの起動のみであり、非同期処理と状態の更新はアクションが担当する。その結果として画面が
+再描画される。流れは常に一方向となる。表示に不整合がある場合、調査対象は DOM ではなくストアである。
 
-## Reactivity in one paragraph (the Java-dev version)
+## リアクティビティの仕組み（Java エンジニア向け）
 
-In Java, if you have `int temp = 20;` and later render it, changing `temp` does nothing to the UI — you'd
-re-render manually. Vue wraps your state in reactive proxies. When you read `store.temp` inside a
-component's template, Vue records "this component depends on `temp`." When you later assign a new value,
-Vue knows exactly which components to re-run. `computed(() => a + b)` is a memoized derived value —
-think a getter that caches until its inputs change. `watch(source, cb)` is an observer/listener that
-fires a side effect when a value changes (e.g., "when the city changes, refetch"). That's the whole model.
+Java において `int temp = 20;` を画面に描画した後で `temp` を変更しても、UI は変化しない。再描画を
+明示的に行う必要がある。Vue は状態をリアクティブなプロキシでラップすることで、この処理を自動化している。
+
+コンポーネントのテンプレートで `store.temp` を参照すると、Vue は「このコンポーネントは `temp` に依存する」
+という関係を記録する。その後に値が代入されると、再実行すべきコンポーネントが特定できる。
+`computed(() => a + b)` は入力が変化するまで結果をキャッシュする導出値であり、キャッシュ付きのゲッターに
+相当する。`watch(source, cb)` は値の変化を監視して副作用を実行するものであり、「都市が変わったら再取得する」
+といった処理に用いる。リアクティビティの仕組みはこれで全体である。
