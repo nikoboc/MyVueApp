@@ -8,8 +8,13 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      // "@/..." resolves to "src/..." — see docs/05 §10 (modules & imports).
+      // "@/..." を "src/..." へ解決する。docs/05 §10（モジュールと import）を参照。
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  server: {
+    // スマートフォンからの動作確認のため、Cloudflare のクイックトンネル
+    // （*.trycloudflare.com）経由での開発サーバー公開を許可する。開発時のみ。
+    allowedHosts: ['.trycloudflare.com'],
   },
 })
