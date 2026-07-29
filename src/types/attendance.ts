@@ -66,16 +66,24 @@ export interface PunchDraft {
   readonly at: string
 }
 
+/** 1 回の休憩の入力値。時刻は "HH:mm" 形式で、未入力なら空文字とする。 */
+export interface BreakEntry {
+  readonly start: string
+  readonly end: string
+}
+
 /**
- * 1 日分をまとめて入力するときの入力値。時刻は "HH:mm" 形式で、休憩は未入力なら
- * 空文字とする。フォームの入力をそのまま受け取れる形にしてある。
+ * 1 日分をまとめて入力するときの入力値。時刻は "HH:mm" 形式で、未入力なら空文字と
+ * する。フォームの入力をそのまま受け取れる形にしてある。
+ *
+ * 休憩は配列で持つ。午前と午後に分けて取る場合など、1 日に複数回あるのは珍しく
+ * ない。両方が空欄の要素は「入力されていない」ものとして無視する。
  */
 export interface DayEntry {
   readonly date: string
   readonly clockIn: string
   readonly clockOut: string
-  readonly breakStart: string
-  readonly breakEnd: string
+  readonly breaks: readonly BreakEntry[]
 }
 
 /** 既存の打刻を 1 日分の入力形式へ変換した結果。 */
@@ -84,9 +92,9 @@ export interface DayEntryDraft {
   /**
    * 変換で情報が落ちるかどうか。
    *
-   * 中抜けで出退勤が 2 回ある日や、休憩を複数回取った日は、出勤・休憩・退勤を
-   * 1 組ずつしか持たないこの形式では表せない。true のときに保存すると、拾えな
-   * かった打刻は失われる。
+   * 休憩は複数持てるが、出勤と退勤は 1 つずつしか持てない。中抜けで出退勤が 2 回
+   * ある日や、対にならない休憩の打刻がある日はこの形式で表せない。true のときに
+   * 保存すると、拾えなかった打刻は失われる。
    */
   readonly isLossy: boolean
 }
@@ -97,6 +105,7 @@ export type DayEntryIssue =
   | { readonly kind: 'incomplete-break' }
   | { readonly kind: 'break-end-not-after-start' }
   | { readonly kind: 'break-outside-work' }
+  | { readonly kind: 'breaks-overlap' }
 
 /**
  * 1 日分の入力を打刻へ変換した結果。判別可能なユニオンにすることで、成功時にだけ

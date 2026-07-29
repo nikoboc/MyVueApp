@@ -66,5 +66,7 @@ export function describeDayEntryIssue(issue: DayEntryIssue): string {
       return '休憩終了は休憩開始より後の時刻にしてください'
     case 'break-outside-work':
       return '休憩は出勤から退勤までの間に収めてください'
+    case 'breaks-overlap':
+      return '休憩の時間が重なっています'
   }
 }

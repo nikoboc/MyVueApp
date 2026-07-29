@@ -1,5 +1,6 @@
 import { parseDateTime, toClock, toDateKey, toDateTime, toMonthKey } from '@/services/time'
 import type {
+  BreakEntry,
   DayEntry,
   DayEntryDraft,
   DayEntryResult,
@@ -218,8 +219,31 @@ export function toDayEntry(date: string, punches: readonly Punch[]): DayEntryDra
 
   const clockIns = clocksOf('clock-in')
   const clockOuts = clocksOf('clock-out')
-  const breakStarts = clocksOf('break-start')
-  const breakEnds = clocksOf('break-end')
+
+  // 休憩は開始と終了の対にする必要があるため、種別ごとに集めるのではなく時刻順に
+  // たどって組にする。対にならなかった打刻は拾えないので、その旨を記録する。
+  const breaks: BreakEntry[] = []
+  let pendingStart: string | undefined
+  let hasUnpairedBreak = false
+
+  for (const punch of sortByTime(punches)) {
+    if (punch.type === 'break-start') {
+      if (pendingStart !== undefined) {
+        hasUnpairedBreak = true
+      }
+      pendingStart = toClock(punch.at)
+    } else if (punch.type === 'break-end') {
+      if (pendingStart === undefined) {
+        hasUnpairedBreak = true
+      } else {
+        breaks.push({ start: pendingStart, end: toClock(punch.at) })
+        pendingStart = undefined
+      }
+    }
+  }
+  if (pendingStart !== undefined) {
+    hasUnpairedBreak = true
+  }
 
   return {
     entry: {
@@ -228,10 +252,9 @@ export function toDayEntry(date: string, punches: readonly Punch[]): DayEntryDra
       // その日の始まりと終わりとしては妥当な値になる。
       clockIn: clockIns[0] ?? '',
       clockOut: clockOuts[clockOuts.length - 1] ?? '',
-      breakStart: breakStarts[0] ?? '',
-      breakEnd: breakEnds[0] ?? '',
+      breaks,
     },
-    isLossy: [clockIns, clockOuts, breakStarts, breakEnds].some((clocks) => 1 < clocks.length),
+    isLossy: 1 < clockIns.length || 1 < clockOuts.length || hasUnpairedBreak,
   }
 }
 
@@ -249,11 +272,14 @@ export function toDayEntry(date: string, punches: readonly Punch[]): DayEntryDra
  * @returns 変換した打刻、または最初に見つかった指摘
  */
 export function buildDayPunches(entry: DayEntry): DayEntryResult {
-  const { date, clockIn, clockOut, breakStart, breakEnd } = entry
+  const { date, clockIn, clockOut } = entry
 
-  const hasBreakStart = 0 < breakStart.length
-  const hasBreakEnd = 0 < breakEnd.length
-  if (hasBreakStart !== hasBreakEnd) {
+  // 両方とも空欄の休憩は「入力されていない」ものとして扱う。行を足したまま埋め
+  // なかった場合に、それだけで保存できなくなるのは不便である。
+  const filled = entry.breaks.filter(
+    (period) => 0 < period.start.length || 0 < period.end.length,
+  )
+  if (filled.some((period) => period.start.length < 1 || period.end.length < 1)) {
     return { ok: false, issue: { kind: 'incomplete-break' } }
   }
 
@@ -264,23 +290,37 @@ export function buildDayPunches(entry: DayEntry): DayEntryResult {
     return { ok: false, issue: { kind: 'clock-out-not-after-in' } }
   }
 
-  if (hasBreakStart) {
-    const isBreakOrdered = breakStart < breakEnd
-    if (!isBreakOrdered) {
-      return { ok: false, issue: { kind: 'break-end-not-after-start' } }
-    }
-    const isBreakInsideWork = clockIn <= breakStart && breakEnd <= clockOut
-    if (!isBreakInsideWork) {
-      return { ok: false, issue: { kind: 'break-outside-work' } }
-    }
+  const isEachBreakOrdered = filled.every((period) => period.start < period.end)
+  if (!isEachBreakOrdered) {
+    return { ok: false, issue: { kind: 'break-end-not-after-start' } }
   }
 
-  const punches: PunchDraft[] = [{ type: 'clock-in', at: toDateTime(date, clockIn) }]
-  if (hasBreakStart) {
-    punches.push({ type: 'break-start', at: toDateTime(date, breakStart) })
-    punches.push({ type: 'break-end', at: toDateTime(date, breakEnd) })
+  const isEachBreakInsideWork = filled.every(
+    (period) => clockIn <= period.start && period.end <= clockOut,
+  )
+  if (!isEachBreakInsideWork) {
+    return { ok: false, issue: { kind: 'break-outside-work' } }
   }
-  punches.push({ type: 'clock-out', at: toDateTime(date, clockOut) })
+
+  // 休憩が重なっていると、その時間を二重に引いてしまい実働が短く出る。開始順に
+  // 並べて、直前の終了が次の開始以前であることを確かめる。
+  const ordered = [...filled].sort((a, b) => a.start.localeCompare(b.start))
+  const isSeparated = ordered.every((period, index) => {
+    const previous = ordered[index - 1]
+    return previous === undefined || previous.end <= period.start
+  })
+  if (!isSeparated) {
+    return { ok: false, issue: { kind: 'breaks-overlap' } }
+  }
+
+  const punches: PunchDraft[] = [
+    { type: 'clock-in', at: toDateTime(date, clockIn) },
+    ...ordered.flatMap((period): PunchDraft[] => [
+      { type: 'break-start', at: toDateTime(date, period.start) },
+      { type: 'break-end', at: toDateTime(date, period.end) },
+    ]),
+    { type: 'clock-out', at: toDateTime(date, clockOut) },
+  ]
 
   return { ok: true, punches }
 }

@@ -41,11 +41,59 @@ const emit = defineEmits<{
 
 const store = useAttendanceStore()
 
+/** 休憩 1 行分。`id` は `v-for` の `:key` に使う。 */
+interface BreakRow {
+  id: number
+  start: string
+  end: string
+}
+
+// 行の識別子を採番する。添字を `:key` にすると、途中の行を削除したときに Vue が
+// 別の行と取り違え、入力中の値が隣の行へ残ってしまう。
+let nextBreakId = 0
+
+/**
+ * 休憩の入力行を作る。
+ *
+ * @param start - 開始時刻 "HH:mm"
+ * @param end - 終了時刻 "HH:mm"
+ * @returns 採番済みの入力行
+ */
+function createBreakRow(start = '', end = ''): BreakRow {
+  nextBreakId += 1
+  return { id: nextBreakId, start, end }
+}
+
 const date = ref(props.entry.date)
 const clockIn = ref(props.entry.clockIn)
 const clockOut = ref(props.entry.clockOut)
-const breakStart = ref(props.entry.breakStart)
-const breakEnd = ref(props.entry.breakEnd)
+
+// 既存の休憩があればそれを、無ければ空の 1 行から始める。行が 0 個だと、休憩を
+// 入れたいときにまず「追加」を押す必要があり、手間が増える。
+const breaks = ref<BreakRow[]>(
+  0 < props.entry.breaks.length
+    ? props.entry.breaks.map((period) => createBreakRow(period.start, period.end))
+    : [createBreakRow()],
+)
+
+/** 休憩の入力行を末尾に足す。 */
+function addBreak(): void {
+  breaks.value.push(createBreakRow())
+}
+
+/**
+ * 休憩の入力行を取り除く。最後の 1 行は残し、値だけを空にする。行が無くなると
+ * 休憩を入れ直す手段が「追加」だけになるためである。
+ *
+ * @param id - 対象の行の識別子
+ */
+function removeBreak(id: number): void {
+  if (breaks.value.length <= 1) {
+    breaks.value = [createBreakRow()]
+    return
+  }
+  breaks.value = breaks.value.filter((row) => row.id !== id)
+}
 
 // 直前の送信で見つかった指摘。入力し直せるよう、ダイアログは開いたままにする。
 const issue = ref<DayEntryIssue | null>(null)
@@ -72,8 +120,7 @@ function submit(): void {
     date: date.value,
     clockIn: clockIn.value,
     clockOut: clockOut.value,
-    breakStart: breakStart.value,
-    breakEnd: breakEnd.value,
+    breaks: breaks.value.map((row) => ({ start: row.start, end: row.end })),
   })
 
   if (!result.ok) {
@@ -96,21 +143,34 @@ function submit(): void {
         <span>出勤</span>
         <input v-model="clockIn" type="time" required />
       </label>
-      <label>
-        <span>休憩開始</span>
-        <input v-model="breakStart" type="time" />
-      </label>
-      <label>
-        <span>休憩終了</span>
-        <input v-model="breakEnd" type="time" />
-      </label>
+
+      <!-- 休憩は開始と終了を横に並べ、行ごとに追加・削除する。ラベルを左に置く
+           形では、狭い画面で時刻の入力欄 2 つが収まらない。 -->
+      <fieldset class="breaks">
+        <legend>休憩</legend>
+        <div v-for="(row, index) in breaks" :key="row.id" class="break-row">
+          <input v-model="row.start" type="time" :aria-label="`休憩${index + 1}の開始`" />
+          <span class="tilde" aria-hidden="true">〜</span>
+          <input v-model="row.end" type="time" :aria-label="`休憩${index + 1}の終了`" />
+          <button
+            type="button"
+            class="remove-break"
+            :aria-label="`休憩${index + 1}を削除`"
+            @click="removeBreak(row.id)"
+          >
+            ✕
+          </button>
+        </div>
+        <button type="button" class="add-break" @click="addBreak">休憩を追加</button>
+      </fieldset>
+
       <label>
         <span>退勤</span>
         <input v-model="clockOut" type="time" required />
       </label>
     </form>
 
-    <p class="hint">休憩がない日は、休憩の 2 つを空欄のままにしてください。</p>
+    <p class="hint">休憩がない日は、休憩を空欄のままにしてください。</p>
 
     <!-- 既にその日の記録がある場合、保存すると入れ替わる。取り消せないため、
          保存する前に件数を示す。 -->
@@ -121,7 +181,7 @@ function submit(): void {
     <!-- 出退勤や休憩が複数ある日は、この形式では一部しか表せない。保存すると
          残りが消えるため、打刻画面での修正を案内する。 -->
     <p v-if="isLossy" class="lossy" role="alert">
-      この日には出勤・休憩・退勤が複数あり、この形式では一部しか表せません。個別に直す場合は打刻画面から修正してください。
+      この日には出勤または退勤が複数あり、この形式では一部しか表せません。個別に直す場合は打刻画面から修正してください。
     </p>
 
     <p v-if="issue !== null" class="issue" role="alert">{{ describeDayEntryIssue(issue) }}</p>
@@ -165,6 +225,67 @@ input:disabled {
   border-style: dashed;
   color: gray;
   background: rgba(128, 128, 128, 0.08);
+}
+.breaks {
+  margin: 0;
+  /* 左右の余白は狭くする。休憩行は入力欄 2 つとボタンが並ぶため、ここを広く取ると
+     その分だけ入力欄が狭くなる。 */
+  padding: 0.5rem 0.45rem 0.6rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+legend {
+  padding: 0 0.3rem;
+  font-size: 0.9rem;
+  color: gray;
+}
+/*
+ * grid にして時刻の入力欄に 1fr を割り当てる。flex では入力欄が本来の幅を保とうと
+ * するため、狭い画面でダイアログが横にあふれる。1fr と min-width: 0 の組み合わせ
+ * なら、残りの幅に合わせて縮む。
+ */
+.break-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+.tilde {
+  color: gray;
+}
+.remove-break,
+.add-break {
+  flex: 0 0 auto;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: transparent;
+  color: gray;
+  cursor: pointer;
+}
+.remove-break {
+  width: 2rem;
+  height: 2rem;
+  line-height: 1;
+  font-size: 0.85rem;
+}
+.remove-break:hover,
+.remove-break:focus-visible {
+  background: rgba(220, 38, 38, 0.12);
+  color: crimson;
+}
+.add-break {
+  align-self: flex-start;
+  padding: 0.3rem 0.7rem;
+  border-style: dashed;
+  font-size: 0.85rem;
+}
+.add-break:hover,
+.add-break:focus-visible {
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
 }
 .hint {
   margin: 0.75rem 0 0;
@@ -219,6 +340,30 @@ button:focus-visible {
   button,
   input {
     min-height: 44px;
+  }
+  /* 削除は正方形を保つ。時刻の入力欄 2 つと並ぶため、幅を広げると行が収まらない。 */
+  .remove-break {
+    width: 44px;
+    min-width: 44px;
+  }
+}
+
+/*
+ * 狭い画面では休憩行の時計アイコンを隠す。入力欄の中でアイコンが場所を取るため、
+ * 残さないと "12:00" が "12" のように切れて値が読めなくなる。欄をタップすれば
+ * 選択画面は開くので、操作手段は失われない。出勤と退勤の欄は横幅いっぱいを使える
+ * ため、アイコンはそのまま残す。
+ */
+@media (max-width: 23.5rem) {
+  .break-row input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+  .break-row {
+    gap: 0.3rem;
+  }
+  .breaks {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
   }
 }
 </style>

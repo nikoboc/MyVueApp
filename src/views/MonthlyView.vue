@@ -79,13 +79,7 @@ const defaultDate = computed(() =>
 /** 空の入力でダイアログを開く。どの日に記録するかはこれから決めるため、日付は選べる。 */
 function startAdding(): void {
   editing.value = {
-    entry: {
-      date: defaultDate.value,
-      clockIn: '',
-      clockOut: '',
-      breakStart: '',
-      breakEnd: '',
-    },
+    entry: { date: defaultDate.value, clockIn: '', clockOut: '', breaks: [] },
     lockDate: false,
   }
 }
