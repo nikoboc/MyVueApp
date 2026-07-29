@@ -35,6 +35,11 @@ function sync(): void {
   }
   if (props.open && !element.open) {
     element.showModal()
+    // `showModal()` は既定でダイアログ内の最初のフォーカス可能な要素へフォーカス
+    // する。それが日付や時刻の入力欄だと、開いた瞬間に端末のカレンダーや時刻の
+    // 選択画面が出てしまう。ダイアログ自身へ移しておけば、利用者が入力欄に触れた
+    // ときにだけ選択画面が開く。確定ボタンへ誤って Enter が入ることも防げる。
+    element.focus()
   } else if (!props.open && element.open) {
     element.close()
   }
@@ -56,7 +61,9 @@ onBeforeUnmount(() => {
 <template>
   <!-- Esc キーによる取り消しは `cancel` イベントとして届く。閉じる処理は
        ブラウザーが行うため、ここでは親へ結果を伝えるだけでよい。 -->
-  <dialog ref="dialog" class="dialog" @cancel="emit('cancel')">
+  <!-- tabindex="-1" は、上の focus() で受け取れるようにするために必要。タブ順には
+       入らないため、キーボード操作の妨げにはならない。 -->
+  <dialog ref="dialog" class="dialog" tabindex="-1" @cancel="emit('cancel')">
     <h2>{{ title }}</h2>
     <div class="body"><slot /></div>
     <div class="actions"><slot name="actions" /></div>
@@ -72,6 +79,12 @@ onBeforeUnmount(() => {
   max-width: calc(100vw - 3rem);
   color: inherit;
   background: Canvas;
+}
+/* フォーカスを受け取るのは開いた直後の一度だけで、操作の対象ではない。枠全体を
+   囲む輪郭が出ると目障りなため消す。中の各ボタンや入力欄の輪郭は残る。 */
+.dialog:focus,
+.dialog:focus-visible {
+  outline: none;
 }
 .dialog::backdrop {
   background: rgba(0, 0, 0, 0.45);

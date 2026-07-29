@@ -33,8 +33,8 @@ const emit = defineEmits<{
     <p class="message">{{ message }}</p>
 
     <template #actions>
-      <!-- 取り消しを先に置く。`showModal()` は最初の操作可能な要素に
-           フォーカスするため、誤って確定してしまう事故を減らせる。 -->
+      <!-- 取り消しを先に置く。開いた直後のフォーカスはダイアログ自身にあるため
+           （BaseDialog を参照）、Enter で確定してしまうことはない。 -->
       <button type="button" class="cancel" @click="emit('cancel')">取消</button>
       <button type="button" class="confirm" :class="tone" @click="emit('confirm')">
         {{ confirmLabel }}
