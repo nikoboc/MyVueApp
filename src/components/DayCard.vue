@@ -111,7 +111,6 @@ function confirmRemoval(): void {
             :key="punch.id"
             :punch="punch"
             :date="summary.date"
-            :editable-date="false"
             @submit="save"
             @cancel="editingId = null"
           />
@@ -129,7 +128,6 @@ function confirmRemoval(): void {
       v-if="isAdding"
       :punch="editingPunch"
       :date="summary.date"
-      :editable-date="false"
       @submit="save"
       @cancel="editingId = null"
     />

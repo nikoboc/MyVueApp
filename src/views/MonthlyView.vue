@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import PunchForm from '@/components/PunchForm.vue'
+import DayEntryDialog from '@/components/DayEntryDialog.vue'
 import { useNow } from '@/composables/useNow'
 import { describeIssue } from '@/services/punchLabels'
 import {
@@ -16,7 +16,7 @@ import {
   toMonthKey,
 } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
-import type { PunchType } from '@/types/attendance'
+import type { PunchDraft } from '@/types/attendance'
 
 /** 当月かどうかの判定を更新する間隔。日付が変わったときに追随できればよい。 */
 const TICK_MS = 60_000
@@ -73,22 +73,23 @@ const defaultDate = computed(() =>
 )
 
 /**
- * 打刻を追加する。日ごとのカードと違い、記録が 1 件も無い日も対象にできる。
+ * 入力された 1 日分を保存する。日ごとのカードと違い、記録が 1 件も無い日も
+ * 対象にできる。
  *
- * 表示中の月以外の日付が入力された場合は、その月へ移動する。追加したものが
+ * 表示中の月以外の日付が入力された場合は、その月へ移動する。保存したものが
  * 画面から消えたように見えるのを避けるためである。
  *
- * @param type - 打刻の種別
- * @param at - "YYYY-MM-DDTHH:mm" 形式の時刻
+ * @param date - 対象の日付キー "YYYY-MM-DD"
+ * @param punches - その日の打刻
  */
-function addPunch(type: PunchType, at: string): void {
-  if (!store.addPunch(type, at)) {
-    // 保存に失敗したときはフォームを開いたままにして、入力をやり直せるようにする。
+function saveDay(date: string, punches: readonly PunchDraft[]): void {
+  if (!store.replaceDay(date, punches)) {
+    // 保存に失敗したときはダイアログを開いたままにして、入力をやり直せるようにする。
     return
   }
   isAdding.value = false
 
-  const added = toMonthKey(at)
+  const added = toMonthKey(date)
   if (added !== month.value) {
     void router.push({ name: 'monthly', params: { month: added } })
   }
@@ -131,18 +132,17 @@ function addPunch(type: PunchType, at: string): void {
     <!-- 記録が 1 件も無い日は日ごとのカードが存在せず、打刻画面からは追加できない。
          丸ごと打刻を忘れた日を後から補えるよう、ここでは日付も選ばせる。 -->
     <section class="add">
-      <PunchForm
-        v-if="isAdding"
-        :punch="null"
-        :date="defaultDate"
-        :editable-date="true"
-        @submit="addPunch"
-        @cancel="isAdding = false"
-      />
-      <button v-else type="button" class="add-button" @click="isAdding = true">
-        過去の記録を追加
-      </button>
+      <button type="button" class="add-button" @click="isAdding = true">過去の記録を追加</button>
     </section>
+
+    <!-- v-if で開くたびに作り直す。前回の入力が残っていると、続けて別の日を
+         登録するときに古い時刻を保存してしまう。 -->
+    <DayEntryDialog
+      v-if="isAdding"
+      :date="defaultDate"
+      @submit="saveDay"
+      @cancel="isAdding = false"
+    />
 
     <ul v-if="hasRecords" class="days">
       <li v-for="day in summary.days" :key="day.date">
