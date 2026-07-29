@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import DayEntryDialog from '@/components/DayEntryDialog.vue'
 import { useNow } from '@/composables/useNow'
+import { toDayEntry } from '@/services/attendance'
 import { describeIssue } from '@/services/punchLabels'
 import {
   currentMonthKey,
@@ -16,7 +17,7 @@ import {
   toMonthKey,
 } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
-import type { PunchDraft } from '@/types/attendance'
+import type { DayEntry, DaySummary, PunchDraft } from '@/types/attendance'
 
 /** 当月かどうかの判定を更新する間隔。日付が変わったときに追随できればよい。 */
 const TICK_MS = 60_000
@@ -63,14 +64,35 @@ function goToMonth(offset: number): void {
   void router.push({ name: 'monthly', params: { month: shiftMonth(month.value, offset) } })
 }
 
-// 追加フォームを開いているかどうか。この画面の中だけの一時的な状態である。
-const isAdding = ref(false)
+// 編集中の入力値。`null` のときはダイアログを開かない。追加と修正で同じ
+// ダイアログを使い、初期値だけを差し替える。
+const editing = ref<DayEntry | null>(null)
 
 // 追加時の日付の初期値。当月を見ているなら今日、過去や未来の月を見ているなら
 // その月の 1 日とする。いま画面に出ている月の日付が入るため、選び直す手間が減る。
 const defaultDate = computed(() =>
   isCurrentMonth.value ? todayKey(now.value) : `${month.value}-01`,
 )
+
+/** 空の入力でダイアログを開く。 */
+function startAdding(): void {
+  editing.value = {
+    date: defaultDate.value,
+    clockIn: '',
+    clockOut: '',
+    breakStart: '',
+    breakEnd: '',
+  }
+}
+
+/**
+ * 既存の 1 日分を初期値としてダイアログを開く。
+ *
+ * @param day - 対象の日の集計
+ */
+function startEditing(day: DaySummary): void {
+  editing.value = toDayEntry(day.date, day.punches).entry
+}
 
 /**
  * 入力された 1 日分を保存する。日ごとのカードと違い、記録が 1 件も無い日も
@@ -87,7 +109,7 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
     // 保存に失敗したときはダイアログを開いたままにして、入力をやり直せるようにする。
     return
   }
-  isAdding.value = false
+  editing.value = null
 
   const added = toMonthKey(date)
   if (added !== month.value) {
@@ -132,16 +154,16 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
     <!-- 記録が 1 件も無い日は日ごとのカードが存在せず、打刻画面からは追加できない。
          丸ごと打刻を忘れた日を後から補えるよう、ここでは日付も選ばせる。 -->
     <section class="add">
-      <button type="button" class="add-button" @click="isAdding = true">過去の記録を追加</button>
+      <button type="button" class="add-button" @click="startAdding">過去の記録を追加</button>
     </section>
 
     <!-- v-if で開くたびに作り直す。前回の入力が残っていると、続けて別の日を
-         登録するときに古い時刻を保存してしまう。 -->
+         扱うときに古い時刻を保存してしまう。 -->
     <DayEntryDialog
-      v-if="isAdding"
-      :date="defaultDate"
+      v-if="editing !== null"
+      :entry="editing"
       @submit="saveDay"
-      @cancel="isAdding = false"
+      @cancel="editing = null"
     />
 
     <ul v-if="hasRecords" class="days">
@@ -150,6 +172,14 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
           <span class="date">{{ formatDateLabel(day.date) }}</span>
           <span class="worked">{{ formatDuration(day.workedMs) }}</span>
           <span class="break">休憩 {{ formatDuration(day.breakMs) }}</span>
+          <button
+            type="button"
+            class="edit"
+            :aria-label="`${formatDateLabel(day.date)}を修正`"
+            @click="startEditing(day)"
+          >
+            修正
+          </button>
         </div>
         <p v-if="0 < day.issues.length" class="day-issues">
           {{ day.issues.map(describeIssue).join(' / ') }}
@@ -280,6 +310,30 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
   font-size: 0.85rem;
   color: gray;
   font-variant-numeric: tabular-nums;
+}
+.edit {
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  color: gray;
+  cursor: pointer;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.edit:hover,
+.edit:focus-visible {
+  background: rgba(128, 128, 128, 0.15);
+  color: inherit;
+}
+
+@media (pointer: coarse) {
+  .edit {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.9rem;
+  }
 }
 .day-issues {
   margin: 0.25rem 0 0;

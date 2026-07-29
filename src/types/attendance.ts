@@ -78,6 +78,19 @@ export interface DayEntry {
   readonly breakEnd: string
 }
 
+/** 既存の打刻を 1 日分の入力形式へ変換した結果。 */
+export interface DayEntryDraft {
+  readonly entry: DayEntry
+  /**
+   * 変換で情報が落ちるかどうか。
+   *
+   * 中抜けで出退勤が 2 回ある日や、休憩を複数回取った日は、出勤・休憩・退勤を
+   * 1 組ずつしか持たないこの形式では表せない。true のときに保存すると、拾えな
+   * かった打刻は失われる。
+   */
+  readonly isLossy: boolean
+}
+
 /** 1 日分の入力に対する指摘。 */
 export type DayEntryIssue =
   | { readonly kind: 'clock-out-not-after-in' }

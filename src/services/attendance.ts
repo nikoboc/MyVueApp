@@ -1,6 +1,7 @@
-import { parseDateTime, toDateKey, toDateTime, toMonthKey } from '@/services/time'
+import { parseDateTime, toClock, toDateKey, toDateTime, toMonthKey } from '@/services/time'
 import type {
   DayEntry,
+  DayEntryDraft,
   DayEntryResult,
   DaySummary,
   MonthSummary,
@@ -186,6 +187,51 @@ export function summarizeMonth(month: string, days: readonly DaySummary[]): Mont
     dayCount,
     issueDayCount: inMonth.filter((day) => 0 < day.issues.length).length,
     averageWorkedMs: dayCount < 1 ? 0 : Math.round(workedMs / dayCount),
+  }
+}
+
+/**
+ * 既存の打刻を 1 日分の入力形式へ変換する。まとめて修正するときの初期値になる。
+ *
+ * この形式は出勤・休憩・退勤を 1 組ずつしか持てない。同じ種別が複数ある日は
+ * すべてを表せないため、出勤は最も早いもの、退勤は最も遅いもの、休憩は最初の
+ * 組を採り、情報が落ちることを `isLossy` で知らせる。呼び出し側はこれを利用者に
+ * 提示できる。黙って一部だけ拾うと、保存した時点で残りが消えてしまう。
+ *
+ * @param date - 対象の日付キー "YYYY-MM-DD"
+ * @param punches - その日の打刻
+ * @returns 入力形式へ変換した結果
+ */
+export function toDayEntry(date: string, punches: readonly Punch[]): DayEntryDraft {
+  /**
+   * 指定した種別の時刻を昇順で取り出す。
+   *
+   * @param type - 打刻の種別
+   * @returns "HH:mm" の配列
+   */
+  function clocksOf(type: PunchType): string[] {
+    return punches
+      .filter((punch) => punch.type === type)
+      .map((punch) => toClock(punch.at))
+      .sort((a, b) => a.localeCompare(b))
+  }
+
+  const clockIns = clocksOf('clock-in')
+  const clockOuts = clocksOf('clock-out')
+  const breakStarts = clocksOf('break-start')
+  const breakEnds = clocksOf('break-end')
+
+  return {
+    entry: {
+      date,
+      // 出勤は最も早い時刻、退勤は最も遅い時刻を採る。中抜けがある日でも、
+      // その日の始まりと終わりとしては妥当な値になる。
+      clockIn: clockIns[0] ?? '',
+      clockOut: clockOuts[clockOuts.length - 1] ?? '',
+      breakStart: breakStarts[0] ?? '',
+      breakEnd: breakEnds[0] ?? '',
+    },
+    isLossy: [clockIns, clockOuts, breakStarts, breakEnds].some((clocks) => 1 < clocks.length),
   }
 }
 

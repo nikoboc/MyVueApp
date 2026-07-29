@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue'
 
 import BaseDialog from '@/components/BaseDialog.vue'
-import { buildDayPunches } from '@/services/attendance'
+import { buildDayPunches, toDayEntry } from '@/services/attendance'
 import { describeDayEntryIssue } from '@/services/punchLabels'
 import { formatDateLabel } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
-import type { DayEntryIssue, PunchDraft } from '@/types/attendance'
+import type { DayEntry, DayEntryIssue, PunchDraft } from '@/types/attendance'
 
 /**
  * 1 日分の勤務をまとめて入力するダイアログ。
@@ -19,8 +19,12 @@ import type { DayEntryIssue, PunchDraft } from '@/types/attendance'
  * 表示するだけである。保存そのものは親に任せる（events up、CLAUDE.md 規約 2）。
  */
 const props = defineProps<{
-  /** 日付の初期値 "YYYY-MM-DD"。 */
-  date: string
+  /**
+   * 入力欄の初期値。新規なら時刻を空にした値、修正ならその日の打刻から変換した
+   * 値を渡す。呼び出し側が `v-if` で開くたびに作り直すため、ここで一度読むだけで
+   * よい。
+   */
+  entry: DayEntry
 }>()
 
 const emit = defineEmits<{
@@ -30,17 +34,28 @@ const emit = defineEmits<{
 
 const store = useAttendanceStore()
 
-const date = ref(props.date)
-const clockIn = ref('')
-const clockOut = ref('')
-const breakStart = ref('')
-const breakEnd = ref('')
+const date = ref(props.entry.date)
+const clockIn = ref(props.entry.clockIn)
+const clockOut = ref(props.entry.clockOut)
+const breakStart = ref(props.entry.breakStart)
+const breakEnd = ref(props.entry.breakEnd)
 
 // 直前の送信で見つかった指摘。入力し直せるよう、ダイアログは開いたままにする。
 const issue = ref<DayEntryIssue | null>(null)
 
-// 置き換えの対象になる既存の打刻。日付を選び直すたびに再評価される。
-const existingCount = computed(() => store.summaryFor(date.value).punches.length)
+// 選択中の日付の既存の記録。日付を選び直すたびに再評価される。時刻の入力欄は
+// 追従させない。入力の途中で書き換わると、打ち込んだ値が消えてしまうためである。
+const existing = computed(() => store.summaryFor(date.value).punches)
+
+const existingCount = computed(() => existing.value.length)
+
+// 同じ種別の打刻が複数ある日は、この入力形式では表せない。保存すると拾えなかった
+// 打刻が失われるため、件数だけでなくその事実も伝える。
+const isLossy = computed(() => toDayEntry(date.value, existing.value).isLossy)
+
+const title = computed(() =>
+  0 < existingCount.value ? '1日分をまとめて修正' : '1日分をまとめて入力',
+)
 
 /**
  * 入力を検証し、問題がなければ親へ渡す。
@@ -64,7 +79,7 @@ function submit(): void {
 </script>
 
 <template>
-  <BaseDialog :open="true" title="1日分をまとめて入力" @cancel="emit('cancel')">
+  <BaseDialog :open="true" :title="title" @cancel="emit('cancel')">
     <form id="day-entry" class="form" @submit.prevent="submit">
       <label>
         <span>日付</span>
@@ -94,6 +109,12 @@ function submit(): void {
          保存する前に件数を示す。 -->
     <p v-if="0 < existingCount" class="replace" role="status">
       {{ formatDateLabel(date) }}には既に {{ existingCount }} 件の打刻があります。保存すると入力した内容に置き換わります。
+    </p>
+
+    <!-- 出退勤や休憩が複数ある日は、この形式では一部しか表せない。保存すると
+         残りが消えるため、打刻画面での修正を案内する。 -->
+    <p v-if="isLossy" class="lossy" role="alert">
+      この日には出勤・休憩・退勤が複数あり、この形式では一部しか表せません。個別に直す場合は打刻画面から修正してください。
     </p>
 
     <p v-if="issue !== null" class="issue" role="alert">{{ describeDayEntryIssue(issue) }}</p>
@@ -142,6 +163,15 @@ input {
   border-radius: 0.4rem;
   background: rgba(255, 165, 0, 0.14);
   color: darkorange;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.lossy {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 0.4rem;
+  background: rgba(220, 38, 38, 0.1);
+  color: crimson;
   font-size: 0.8rem;
   line-height: 1.5;
 }
