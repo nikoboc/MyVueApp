@@ -33,6 +33,7 @@ src/
     DayCard.vue            # 1 日分の記録。集計と打刻一覧
     PunchRow.vue           # 打刻 1 件の表示
     PunchForm.vue          # 打刻の追加・修正フォーム
+    BaseConfirmDialog.vue  # 操作の確認ダイアログ（再利用可能な部品）
   composables/
     useAutoRefresh.ts      # クリーンアップを含む、再利用可能な定期実行処理
     useNow.ts              # 一定間隔で更新される現在時刻
@@ -57,12 +58,22 @@ TypeScript とする。とくに `services/attendance.ts` の集計処理は本�
 
 ```
 App.vue
-├── PunchPanel.vue            (今日の打刻。ストアのアクションを直接呼ぶ)
+├── PunchPanel.vue                  (今日の打刻。ストアのアクションを直接呼ぶ)
+│   └── BaseConfirmDialog.vue       (打刻の確認)
 └── store.days を v-for:
-    └── DayCard.vue           (props: summary)
-        ├── PunchRow.vue      (props: punch / emit: edit, remove)
-        └── PunchForm.vue     (props: punch / emit: submit, cancel)
+    └── DayCard.vue                 (props: summary)
+        ├── PunchRow.vue            (props: punch / emit: edit, remove)
+        ├── PunchForm.vue           (props: punch / emit: submit, cancel)
+        └── BaseConfirmDialog.vue   (削除の確認)
 ```
+
+打刻と削除は実行前に確認する。打刻は取り消しに手間がかかり、削除はやり直しが
+できないためである。修正と追加は入力内容が画面に見えており、保存前に取りやめる
+こともできるため確認しない。
+
+確認には `window.confirm` ではなく HTML の `<dialog>` を用いる。`showModal()` は
+背景の操作の遮断、Esc での取り消し、フォーカスの閉じ込めを標準で備えており、
+ホーム画面から起動したときに配信元の URL が表示されることもない。
 
 コンポーネントは可能な限り表示に専念させる。データは **props** で受け取り、上位へは**イベント**で
 伝達する。これが「props down, events up」の原則である。

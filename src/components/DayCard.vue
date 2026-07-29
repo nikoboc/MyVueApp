@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import BaseConfirmDialog from '@/components/BaseConfirmDialog.vue'
 import PunchForm from '@/components/PunchForm.vue'
 import PunchRow from '@/components/PunchRow.vue'
-import { describeIssue } from '@/services/punchLabels'
-import { formatDateLabel, formatDuration, toDateTime } from '@/services/time'
+import { describeIssue, PUNCH_LABELS } from '@/services/punchLabels'
+import { formatDateLabel, formatDuration, toClock, toDateTime } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
 import type { DaySummary, PunchType } from '@/types/attendance'
 
@@ -52,16 +53,31 @@ function save(type: PunchType, clock: string): void {
   }
 }
 
-/**
- * 打刻を削除する。
- *
- * @param id - 対象の `Punch.id`
- */
-function remove(id: string): void {
-  store.removePunch(id)
-  if (editingId.value === id) {
-    editingId.value = null
+// 削除の確認待ちの打刻。`null` のときはダイアログを開かない。
+const pendingRemovalId = ref<string | null>(null)
+
+const pendingRemoval = computed(
+  () => props.summary.punches.find((punch) => punch.id === pendingRemovalId.value) ?? null,
+)
+
+const removalMessage = computed(() => {
+  const punch = pendingRemoval.value
+  if (punch === null) {
+    return ''
   }
+  return `${toClock(punch.at)} の「${PUNCH_LABELS[punch.type]}」を削除します。この操作は取り消せません。`
+})
+
+/** 確認された打刻を削除する。 */
+function confirmRemoval(): void {
+  const id = pendingRemovalId.value
+  if (id !== null) {
+    store.removePunch(id)
+    if (editingId.value === id) {
+      editingId.value = null
+    }
+  }
+  pendingRemovalId.value = null
 }
 </script>
 
@@ -98,13 +114,25 @@ function remove(id: string): void {
           v-else
           :punch="punch"
           @edit="editingId = $event"
-          @remove="remove"
+          @remove="pendingRemovalId = $event"
         />
       </template>
     </ul>
 
     <PunchForm v-if="isAdding" :punch="editingPunch" @submit="save" @cancel="editingId = null" />
     <button v-else type="button" class="add" @click="editingId = ADDING">打刻を追加</button>
+
+    <!-- 削除は取り消せず、消した打刻は集計からも消える。誤ってタップした場合の
+         被害が大きいため確認する。 -->
+    <BaseConfirmDialog
+      :open="pendingRemoval !== null"
+      title="打刻の削除"
+      :message="removalMessage"
+      confirm-label="削除"
+      tone="danger"
+      @confirm="confirmRemoval"
+      @cancel="pendingRemovalId = null"
+    />
   </article>
 </template>
 

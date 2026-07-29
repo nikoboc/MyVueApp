@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
+import BaseConfirmDialog from '@/components/BaseConfirmDialog.vue'
 import { useNow } from '@/composables/useNow'
 import { allowedPunchTypes } from '@/services/attendance'
 import { PUNCH_LABELS, STATUS_LABELS } from '@/services/punchLabels'
-import { formatDuration, parseDateTime, toClock, todayKey } from '@/services/time'
+import { formatDateTime, formatDuration, parseDateTime, toClock, todayKey } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
 import { PUNCH_TYPES, type PunchType } from '@/types/attendance'
 
@@ -62,6 +63,40 @@ const clock = computed(() =>
 function canPunch(type: PunchType): boolean {
   return allowed.value.includes(type)
 }
+
+// 確認待ちの打刻。`null` のときはダイアログを開かない。このコンポーネントの中
+// だけで完結する一時的な UI 状態なので、Pinia には置かない。
+const pendingType = ref<PunchType | null>(null)
+
+// 確認する時刻を、ボタンを押した時点で固定する。`now` をそのまま表示すると、
+// ダイアログの表示中に秒が進み、確認した時刻と記録される時刻がずれてしまう。
+const pendingAtMs = ref(0)
+
+const pendingMessage = computed(() => {
+  if (pendingType.value === null) {
+    return ''
+  }
+  return `${toClock(formatDateTime(pendingAtMs.value))} に「${PUNCH_LABELS[pendingType.value]}」として記録します。`
+})
+
+/**
+ * 打刻の確認を求める。
+ *
+ * @param type - 打刻しようとしている種別
+ */
+function requestPunch(type: PunchType): void {
+  pendingAtMs.value = Date.now()
+  pendingType.value = type
+}
+
+/** 確認された打刻を記録する。 */
+function confirmPunch(): void {
+  if (pendingType.value !== null) {
+    // 確認時に表示した時刻をそのまま記録する。
+    store.punch(pendingType.value, pendingAtMs.value)
+  }
+  pendingType.value = null
+}
 </script>
 
 <template>
@@ -84,11 +119,22 @@ function canPunch(type: PunchType): boolean {
         class="punch"
         :class="type"
         :disabled="!canPunch(type)"
-        @click="store.punch(type)"
+        @click="requestPunch(type)"
       >
         {{ PUNCH_LABELS[type] }}
       </button>
     </div>
+
+    <!-- 打刻は取り消しに手間がかかるため、記録する前に確認する。表示する時刻は
+         ボタンを押した時点のもので、実際に記録される時刻と一致する。 -->
+    <BaseConfirmDialog
+      :open="pendingType !== null"
+      title="打刻の確認"
+      :message="pendingMessage"
+      :confirm-label="pendingType === null ? '実行' : PUNCH_LABELS[pendingType]"
+      @confirm="confirmPunch"
+      @cancel="pendingType = null"
+    />
 
     <dl class="totals">
       <div>
