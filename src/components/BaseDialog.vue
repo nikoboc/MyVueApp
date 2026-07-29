@@ -35,11 +35,6 @@ function sync(): void {
   }
   if (props.open && !element.open) {
     element.showModal()
-    // `showModal()` は既定でダイアログ内の最初のフォーカス可能な要素へフォーカス
-    // する。それが日付や時刻の入力欄だと、開いた瞬間に端末のカレンダーや時刻の
-    // 選択画面が出てしまう。ダイアログ自身へ移しておけば、利用者が入力欄に触れた
-    // ときにだけ選択画面が開く。確定ボタンへ誤って Enter が入ることも防げる。
-    element.focus()
   } else if (!props.open && element.open) {
     element.close()
   }
@@ -61,10 +56,21 @@ onBeforeUnmount(() => {
 <template>
   <!-- Esc キーによる取り消しは `cancel` イベントとして届く。閉じる処理は
        ブラウザーが行うため、ここでは親へ結果を伝えるだけでよい。 -->
-  <!-- tabindex="-1" は、上の focus() で受け取れるようにするために必要。タブ順には
-       入らないため、キーボード操作の妨げにはならない。 -->
-  <dialog ref="dialog" class="dialog" tabindex="-1" @cancel="emit('cancel')">
-    <h2>{{ title }}</h2>
+  <dialog ref="dialog" class="dialog" @cancel="emit('cancel')">
+    <!--
+      `showModal()` は既定でダイアログ内の最初のフォーカス可能な要素へフォーカス
+      する。それが日付や時刻の入力欄だと、開いた瞬間に端末のカレンダーや時刻の
+      選択画面が出てしまう。
+
+      `autofocus` を付けた要素があれば、そちらが優先される。見出しに付けることで
+      入力欄にはフォーカスが当たらず、選択画面も開かない。開いた後で移し替える
+      方法では、入力欄に一度フォーカスが当たるため選択画面が一瞬開いて閉じる。
+
+      見出しへのフォーカスは読み上げにも都合がよく、開いた時点でダイアログの用件が
+      読まれる。tabindex="-1" は見出しをフォーカス可能にするためで、タブ順には
+      入らない。
+    -->
+    <h2 tabindex="-1" autofocus>{{ title }}</h2>
     <div class="body"><slot /></div>
     <div class="actions"><slot name="actions" /></div>
   </dialog>
@@ -80,10 +86,10 @@ onBeforeUnmount(() => {
   color: inherit;
   background: Canvas;
 }
-/* フォーカスを受け取るのは開いた直後の一度だけで、操作の対象ではない。枠全体を
-   囲む輪郭が出ると目障りなため消す。中の各ボタンや入力欄の輪郭は残る。 */
-.dialog:focus,
-.dialog:focus-visible {
+/* 見出しがフォーカスを受け取るのは開いた直後の一度だけで、操作の対象ではない。
+   輪郭が出ると目障りなため消す。中の各ボタンや入力欄の輪郭は残る。 */
+h2:focus,
+h2:focus-visible {
   outline: none;
 }
 .dialog::backdrop {
