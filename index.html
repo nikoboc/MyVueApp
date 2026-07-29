@@ -2,8 +2,20 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WeatherBoard — お天気ダッシュボード</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TimeCard — 勤怠打刻</title>
+
+    <!-- ホーム画面へ追加したときの設定。%BASE_URL% は Vite がビルド時に base へ
+         置き換えるため、サブパスで配信しても正しい URL になる。 -->
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%icon.svg" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <meta name="theme-color" content="#2e8b57" />
+    <meta name="description" content="出勤・退勤・休憩を記録する勤怠打刻アプリ" />
+    <!-- iOS でホーム画面から起動したときに、ブラウザーの UI を出さない -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TimeCard" />
+
     <style>
       :root {
         color-scheme: light dark;
@@ -17,6 +29,9 @@
            表示されるが、フォールバックを列挙することで環境による字形の差を抑える。 */
         font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP",
           Meiryo, Roboto, sans-serif;
+        /* ホーム画面から起動したときに、切り欠きのある端末で内容が隠れないようにする */
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
       }
     </style>
   </head>

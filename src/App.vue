@@ -1,55 +1,38 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import LocationCard from '@/components/LocationCard.vue'
-import LocationSearch from '@/components/LocationSearch.vue'
-import { useAutoRefresh } from '@/composables/useAutoRefresh'
-import { useWeatherStore } from '@/stores/useWeatherStore'
-
-/** 10 分ごとに再取得する。天気の変化は緩やかであり、無料 API への負荷も抑えられる。 */
-const REFRESH_INTERVAL_MS = 10 * 60 * 1000
+import DayCard from '@/components/DayCard.vue'
+import PunchPanel from '@/components/PunchPanel.vue'
+import { useAttendanceStore } from '@/stores/useAttendanceStore'
 
 // App はコンポーネントを組み合わせるだけで、ロジックはほとんど持たない。状態は
 // ストアが保持し、描画は子コンポーネントが担当する。
-const store = useWeatherStore()
+const store = useAttendanceStore()
 
-const hasLocations = computed(() => 0 < store.locations.length)
-
-// 自動更新をルートに配置することで、アプリケーションの動作中は常に有効となる。
-// タイマーは App のマウント時に開始し、アンマウント時にコンポーザブルの内部で
-// 破棄される。地点が 1 件も無い場合、refreshAll は何も行わずに終了する。
-useAutoRefresh(() => {
-  void store.refreshAll()
-}, REFRESH_INTERVAL_MS)
+const hasRecords = computed(() => 0 < store.days.length)
 </script>
 
 <template>
   <main class="app">
     <header>
-      <h1>WeatherBoard</h1>
-      <p class="subtitle">フェーズ 5 — 自動更新、更新時刻の表示、地点の削除</p>
+      <h1>TimeCard</h1>
+      <p class="subtitle">勤怠打刻</p>
     </header>
 
-    <!-- 一連の流れがこの 1 行に集約されている。子が選択を通知し、App がそれを
-         ストアのアクションへ接続し、ストアが取得して状態を更新する。その状態を
-         参照するすべてのコンポーネントが再描画される。削除も方向が逆になるだけで
-         同じ構造である。 -->
-    <LocationSearch @select="store.addLocation" />
+    <PunchPanel />
 
     <p v-if="store.error" class="error" role="alert">{{ store.error }}</p>
 
-    <section v-if="hasLocations" class="board">
-      <LocationCard
-        v-for="location in store.locations"
-        :key="location.id"
-        :location="location"
-        @remove="store.removeLocation"
-      />
+    <section v-if="hasRecords" class="history">
+      <h2>記録</h2>
+      <!-- 日付キーを :key に使う。日ごとの並び替えや削除が起きても、Vue は
+           対応するカードを取り違えずに差分更新できる。 -->
+      <DayCard v-for="day in store.days" :key="day.date" :summary="day" />
     </section>
 
-    <!-- 地点が 1 件も無い場合の表示。これが無いと画面が空白となり、未追加の
+    <!-- 記録が 1 件も無い場合の表示。これが無いと画面が空白となり、未打刻の
          状態なのか不具合なのかを区別できない。 -->
-    <p v-else class="empty">上の検索ボックスから都市を追加してください。</p>
+    <p v-else class="empty">まだ打刻がありません。上のボタンから出勤を記録してください。</p>
   </main>
 </template>
 
@@ -76,10 +59,16 @@ h1 {
   margin: 0;
   color: crimson;
 }
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+.history {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+}
+.history h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: gray;
+  font-weight: 600;
 }
 .empty {
   margin: 0;
