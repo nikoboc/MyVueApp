@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import PunchForm from '@/components/PunchForm.vue'
 import { useNow } from '@/composables/useNow'
 import { describeIssue } from '@/services/punchLabels'
 import {
@@ -11,8 +12,11 @@ import {
   formatMonthLabel,
   isMonthKey,
   shiftMonth,
+  todayKey,
+  toMonthKey,
 } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
+import type { PunchType } from '@/types/attendance'
 
 /** 当月かどうかの判定を更新する間隔。日付が変わったときに追随できればよい。 */
 const TICK_MS = 60_000
@@ -58,6 +62,37 @@ const issueNotice = computed(
 function goToMonth(offset: number): void {
   void router.push({ name: 'monthly', params: { month: shiftMonth(month.value, offset) } })
 }
+
+// 追加フォームを開いているかどうか。この画面の中だけの一時的な状態である。
+const isAdding = ref(false)
+
+// 追加時の日付の初期値。当月を見ているなら今日、過去や未来の月を見ているなら
+// その月の 1 日とする。いま画面に出ている月の日付が入るため、選び直す手間が減る。
+const defaultDate = computed(() =>
+  isCurrentMonth.value ? todayKey(now.value) : `${month.value}-01`,
+)
+
+/**
+ * 打刻を追加する。日ごとのカードと違い、記録が 1 件も無い日も対象にできる。
+ *
+ * 表示中の月以外の日付が入力された場合は、その月へ移動する。追加したものが
+ * 画面から消えたように見えるのを避けるためである。
+ *
+ * @param type - 打刻の種別
+ * @param at - "YYYY-MM-DDTHH:mm" 形式の時刻
+ */
+function addPunch(type: PunchType, at: string): void {
+  if (!store.addPunch(type, at)) {
+    // 保存に失敗したときはフォームを開いたままにして、入力をやり直せるようにする。
+    return
+  }
+  isAdding.value = false
+
+  const added = toMonthKey(at)
+  if (added !== month.value) {
+    void router.push({ name: 'monthly', params: { month: added } })
+  }
+}
 </script>
 
 <template>
@@ -90,6 +125,24 @@ function goToMonth(offset: number): void {
     <!-- 打刻漏れのある日は集計に含まれない時間が生じる。合計だけを見て判断しない
          よう、件数を明示する。 -->
     <p v-if="0 < summary.issueDayCount" class="issues" role="status">{{ issueNotice }}</p>
+
+    <p v-if="store.error" class="error" role="alert">{{ store.error }}</p>
+
+    <!-- 記録が 1 件も無い日は日ごとのカードが存在せず、打刻画面からは追加できない。
+         丸ごと打刻を忘れた日を後から補えるよう、ここでは日付も選ばせる。 -->
+    <section class="add">
+      <PunchForm
+        v-if="isAdding"
+        :punch="null"
+        :date="defaultDate"
+        :editable-date="true"
+        @submit="addPunch"
+        @cancel="isAdding = false"
+      />
+      <button v-else type="button" class="add-button" @click="isAdding = true">
+        過去の記録を追加
+      </button>
+    </section>
 
     <ul v-if="hasRecords" class="days">
       <li v-for="day in summary.days" :key="day.date">
@@ -171,6 +224,33 @@ function goToMonth(offset: number): void {
   color: crimson;
   font-size: 0.85rem;
   line-height: 1.5;
+}
+.error {
+  margin: 0;
+  color: crimson;
+}
+.add {
+  display: flex;
+}
+.add-button {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px dashed rgba(128, 128, 128, 0.5);
+  background: transparent;
+  color: gray;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.add-button:hover,
+.add-button:focus-visible {
+  background: rgba(128, 128, 128, 0.12);
+  color: inherit;
+}
+
+@media (pointer: coarse) {
+  .add-button {
+    min-height: 44px;
+  }
 }
 .days {
   list-style: none;

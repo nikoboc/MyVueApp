@@ -5,7 +5,7 @@ import BaseConfirmDialog from '@/components/BaseConfirmDialog.vue'
 import PunchForm from '@/components/PunchForm.vue'
 import PunchRow from '@/components/PunchRow.vue'
 import { describeIssue, PUNCH_LABELS } from '@/services/punchLabels'
-import { formatDateLabel, formatDuration, toClock, toDateTime } from '@/services/time'
+import { formatDateLabel, formatDuration, toClock } from '@/services/time'
 import { useAttendanceStore } from '@/stores/useAttendanceStore'
 import type { DaySummary, PunchType } from '@/types/attendance'
 
@@ -36,13 +36,12 @@ const editingPunch = computed(
 )
 
 /**
- * 入力された時刻を保存する。追加と修正のどちらであるかは編集中の状態で決まる。
+ * 入力された内容を保存する。追加と修正のどちらであるかは編集中の状態で決まる。
  *
  * @param type - 打刻の種別
- * @param clock - "HH:mm" 形式の時刻
+ * @param at - "YYYY-MM-DDTHH:mm" 形式の時刻
  */
-function save(type: PunchType, clock: string): void {
-  const at = toDateTime(props.summary.date, clock)
+function save(type: PunchType, at: string): void {
   const saved = isAdding.value
     ? store.addPunch(type, at)
     : store.updatePunch(editingId.value ?? '', type, at)
@@ -108,7 +107,14 @@ function confirmRemoval(): void {
         <!-- 編集中の行はフォームに差し替える。:key に id を指定しているため、
              対象が変わればフォームは初期値ごと作り直される。 -->
         <li v-if="editingId === punch.id" class="editing">
-          <PunchForm :key="punch.id" :punch="punch" @submit="save" @cancel="editingId = null" />
+          <PunchForm
+            :key="punch.id"
+            :punch="punch"
+            :date="summary.date"
+            :editable-date="false"
+            @submit="save"
+            @cancel="editingId = null"
+          />
         </li>
         <PunchRow
           v-else
@@ -119,7 +125,14 @@ function confirmRemoval(): void {
       </template>
     </ul>
 
-    <PunchForm v-if="isAdding" :punch="editingPunch" @submit="save" @cancel="editingId = null" />
+    <PunchForm
+      v-if="isAdding"
+      :punch="editingPunch"
+      :date="summary.date"
+      :editable-date="false"
+      @submit="save"
+      @cancel="editingId = null"
+    />
     <button v-else type="button" class="add" @click="editingId = ADDING">打刻を追加</button>
 
     <!-- 削除は取り消せず、消した打刻は集計からも消える。誤ってタップした場合の

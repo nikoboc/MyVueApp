@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 
 import { PUNCH_LABELS } from '@/services/punchLabels'
-import { toClock } from '@/services/time'
+import { toClock, toDateKey, toDateTime } from '@/services/time'
 import { PUNCH_TYPES, type Punch, type PunchType } from '@/types/attendance'
 
 /**
@@ -16,10 +16,22 @@ import { PUNCH_TYPES, type Punch, type PunchType } from '@/types/attendance'
  * 存在しない」ことを意図して表すため、ここは `undefined` ではなく `null` を使う
  * （docs/05 §4）。
  */
-const props = defineProps<{ punch: Punch | null }>()
+const props = defineProps<{
+  /** 編集対象の打刻。追加のときは `null`。 */
+  punch: Punch | null
+  /** 対象の日付 "YYYY-MM-DD"。追加時の初期値になる。 */
+  date: string
+  /**
+   * 日付も選ばせるかどうか。
+   *
+   * 日ごとのカードでは、どの日の打刻かがカード自体で決まっているため入力させない。
+   * 月次集計から追加する場合は、記録が 1 件も無い日を選べる必要があるため入力させる。
+   */
+  editableDate: boolean
+}>()
 
 const emit = defineEmits<{
-  (e: 'submit', type: PunchType, clock: string): void
+  (e: 'submit', type: PunchType, at: string): void
   (e: 'cancel'): void
 }>()
 
@@ -28,20 +40,23 @@ const emit = defineEmits<{
 // コンポーネントごと再生成される。
 const type = ref<PunchType>(props.punch?.type ?? 'clock-in')
 const clock = ref(props.punch === null ? '' : toClock(props.punch.at))
+const date = ref(props.punch === null ? props.date : toDateKey(props.punch.at))
 
 /**
  * 入力内容を親へ渡す。
  *
- * 時刻が未入力のまま送信されることは `required` が防ぐため、ここでは形式の検証を
- * 行わない。日付と組み合わせた最終的な妥当性はストアが確認する。
+ * 未入力のまま送信されることは `required` が防ぐため、ここでは形式の検証を
+ * 行わない。実在しない日時でないかの最終的な確認はストアが行う。
  */
 function submit(): void {
-  emit('submit', type.value, clock.value)
+  emit('submit', type.value, toDateTime(date.value, clock.value))
 }
 </script>
 
 <template>
   <form class="form" @submit.prevent="submit">
+    <input v-if="editableDate" v-model="date" type="date" required aria-label="日付" class="date" />
+
     <select v-model="type" aria-label="打刻の種別">
       <option v-for="value in PUNCH_TYPES" :key="value" :value="value">
         {{ PUNCH_LABELS[value] }}
