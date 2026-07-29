@@ -2,10 +2,11 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from '@/App.vue'
+import { router } from '@/router'
 
-// mount より先に Pinia を install する。これによりすべてのコンポーネントから
-// ストアを参照できるようになる。
-createApp(App).use(createPinia()).mount('#app')
+// mount より先に Pinia とルーターを install する。これによりすべてのコンポーネント
+// から、ストアと画面遷移を参照できるようになる。
+createApp(App).use(createPinia()).use(router).mount('#app')
 
 // Service Worker を登録し、通信できない場所でも打刻できるようにする。
 //

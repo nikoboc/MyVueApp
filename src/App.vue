@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { RouterLink, RouterView } from 'vue-router'
 
-import DayCard from '@/components/DayCard.vue'
-import PunchPanel from '@/components/PunchPanel.vue'
-import { useAttendanceStore } from '@/stores/useAttendanceStore'
-
-// App はコンポーネントを組み合わせるだけで、ロジックはほとんど持たない。状態は
-// ストアが保持し、描画は子コンポーネントが担当する。
-const store = useAttendanceStore()
-
-const hasRecords = computed(() => 0 < store.days.length)
+// App は全体の枠だけを持ち、画面の中身は RouterView が差し替える。状態はストアが
+// 保持し、描画は各画面のコンポーネントが担当する。
 </script>
 
 <template>
@@ -19,20 +12,14 @@ const hasRecords = computed(() => 0 < store.days.length)
       <p class="subtitle">勤怠打刻</p>
     </header>
 
-    <PunchPanel />
+    <!-- RouterLink は現在の画面に router-link-active を付けるため、選択中の
+         表示を自前で管理しなくてよい。 -->
+    <nav>
+      <RouterLink to="/">打刻</RouterLink>
+      <RouterLink to="/monthly">月次集計</RouterLink>
+    </nav>
 
-    <p v-if="store.error" class="error" role="alert">{{ store.error }}</p>
-
-    <section v-if="hasRecords" class="history">
-      <h2>記録</h2>
-      <!-- 日付キーを :key に使う。日ごとの並び替えや削除が起きても、Vue は
-           対応するカードを取り違えずに差分更新できる。 -->
-      <DayCard v-for="day in store.days" :key="day.date" :summary="day" />
-    </section>
-
-    <!-- 記録が 1 件も無い場合の表示。これが無いと画面が空白となり、未打刻の
-         状態なのか不具合なのかを区別できない。 -->
-    <p v-else class="empty">まだ打刻がありません。上のボタンから出勤を記録してください。</p>
+    <RouterView />
   </main>
 </template>
 
@@ -55,27 +42,33 @@ h1 {
   margin: 0.25rem 0 0;
   color: gray;
 }
-.error {
-  margin: 0;
-  color: crimson;
-}
-.history {
+nav {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
 }
-.history h2 {
-  margin: 0;
-  font-size: 1rem;
+nav a {
+  padding: 0.6rem 1rem;
   color: gray;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+nav a:hover,
+nav a:focus-visible {
+  color: inherit;
+}
+nav a.router-link-active {
+  color: seagreen;
+  border-bottom-color: seagreen;
   font-weight: 600;
 }
-.empty {
-  margin: 0;
-  padding: 2rem;
-  text-align: center;
-  color: gray;
-  border: 1px dashed rgba(128, 128, 128, 0.4);
-  border-radius: 0.75rem;
+
+@media (pointer: coarse) {
+  nav a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
 }
 </style>

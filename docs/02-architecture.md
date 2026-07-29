@@ -8,17 +8,27 @@
 | 言語 | **TypeScript** | Java の静的型付け |
 | UI フレームワーク | **Vue 3**（Composition API、`<script setup>`） | ビューとリアクティビティのエンジン |
 | 状態管理 | **Pinia** | 状態を保持する `@Service`／シングルトン Bean |
+| 画面遷移 | **vue-router**（ハッシュモード） | コントローラーのルーティング定義 |
 | 保存先 | **`localStorage`**（サービス層でラップする） | リポジトリの実装 |
 
-依存関係は意図的に最小限としている。UI コンポーネントライブラリは導入せず、画面が単一であるため
-ルーターも使用しない。HTTP クライアントも不要である。必要が生じた時点で追加する。
+依存関係は意図的に最小限としている。UI コンポーネントライブラリは導入せず、HTTP クライアントも
+不要である。ルーターは月次集計画面を追加した時点で導入した。
+
+**ハッシュモードを用いる理由。** 履歴モードでは `/MyVueApp/monthly` のようなパスがサーバーへ届くが、
+GitHub Pages にはその名前のファイルが存在せず 404 になる。ハッシュより後ろはサーバーに送られない
+ため、配信側の設定を変えずに済み、オフラインでも同じように動作する。
 
 ## ディレクトリ構成
 
 ```
 src/
-  main.ts                  # エントリポイント。app の生成、Pinia の install、mount
-  App.vue                  # ルートコンポーネント。全体のレイアウト
+  main.ts                  # エントリポイント。app の生成、Pinia とルーターの install、mount
+  App.vue                  # ルートコンポーネント。全体の枠とナビゲーション
+  router/
+    index.ts               # 画面遷移の定義（ハッシュモード）
+  views/
+    PunchView.vue          # 打刻画面。今日の打刻と日ごとの記録
+    MonthlyView.vue        # 月次集計画面。月の合計と日ごとの内訳
   types/
     attendance.ts          # ドメインモデルの型定義
   services/
@@ -57,15 +67,20 @@ TypeScript とする。とくに `services/attendance.ts` の集計処理は本�
 ## コンポーネントツリー
 
 ```
-App.vue
-├── PunchPanel.vue                  (今日の打刻。ストアのアクションを直接呼ぶ)
-│   └── BaseConfirmDialog.vue       (打刻の確認)
-└── store.days を v-for:
-    └── DayCard.vue                 (props: summary)
-        ├── PunchRow.vue            (props: punch / emit: edit, remove)
-        ├── PunchForm.vue           (props: punch / emit: submit, cancel)
-        └── BaseConfirmDialog.vue   (削除の確認)
+App.vue                              (ヘッダーとナビゲーション + RouterView)
+├── PunchView.vue                    ルート "/"
+│   ├── PunchPanel.vue               (今日の打刻。ストアのアクションを直接呼ぶ)
+│   │   └── BaseConfirmDialog.vue    (打刻の確認)
+│   └── store.days を v-for:
+│       └── DayCard.vue              (props: summary)
+│           ├── PunchRow.vue         (props: punch / emit: edit, remove)
+│           ├── PunchForm.vue        (props: punch / emit: submit, cancel)
+│           └── BaseConfirmDialog.vue (削除の確認)
+└── MonthlyView.vue                  ルート "/monthly/:month?"
 ```
+
+月次集計の対象月は URL に含める（`#/monthly/2026-07`）。特定の月をブックマークしたり共有したり
+できるほか、端末の戻る操作で前の月へ戻れる。省略時は当月を表示する。
 
 打刻と削除は実行前に確認する。打刻は取り消しに手間がかかり、削除はやり直しが
 できないためである。修正と追加は入力内容が画面に見えており、保存前に取りやめる

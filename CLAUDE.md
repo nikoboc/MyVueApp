@@ -27,6 +27,10 @@
 - **TypeScript** — strict。ドメインの境界とストアの状態には型を明示する。
   [`docs/05-typescript-conventions.md`](./docs/05-typescript-conventions.md) に従うこと。
 - **Pinia** — setup 形式のストア（`defineStore("x", () => { ... })`）。
+- **vue-router** — 画面遷移。**ハッシュモード（`createWebHashHistory`）を用いる。**
+  履歴モードでは `/MyVueApp/monthly` のようなパスがサーバーへ届き、GitHub Pages には
+  その名前のファイルが無いため 404 になる。ハッシュより後ろはサーバーに送られないため、
+  配信側の設定が不要で、オフラインでも同じように動作する。
 - **Vite** — ビルドおよび開発用のツール。
 - **`localStorage`** — 保存先。サーバー、API、データベースは使用しない。
 
@@ -48,11 +52,14 @@
 7. **副作用はクリーンアップする。** `onMounted` で開始した `setInterval` やリスナーは、必ず
    `onUnmounted` で破棄する（コンポーザブルへの切り出しが望ましい）。
 8. **外部から読み込んだデータは検証する。** `localStorage` の内容は `unknown` として受け、型ガードで
-   絞り込んでから使用する。
+   絞り込んでから使用する。URL のパラメーターも同様に、利用者が書き換えられる入力として扱う
+   （`MonthlyView` の月キーが該当する）。
 
 ## 命名と構成
 
 - コンポーネント: `PascalCase.vue`。再利用可能なものには `Base` を付与する。
+- 画面: `src/views/` に `XView.vue`。ルートに対応する単位であり、`src/components/` の
+  部品とは役割が異なるため、ディレクトリを分ける。
 - ストア: `useXStore.ts`。`useXStore` として export する。
 - コンポーザブル: `src/composables/` に `useX.ts`。
 - 識別子の命名（変数、関数、定数、真偽値、ジェネリクス）は
