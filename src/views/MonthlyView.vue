@@ -65,9 +65,10 @@ function goToMonth(offset: number): void {
   void router.push({ name: 'monthly', params: { month: shiftMonth(month.value, offset) } })
 }
 
-// 編集中の入力値。`null` のときはダイアログを開かない。追加と修正で同じ
-// ダイアログを使い、初期値だけを差し替える。
-const editing = ref<DayEntry | null>(null)
+// 編集中の内容。`null` のときはダイアログを開かない。追加と修正で同じダイアログを
+// 使い、初期値と日付を変更できるかどうかだけを差し替える。両者は必ず対で決まる
+// ため、1 つの状態にまとめておく。
+const editing = ref<{ entry: DayEntry; lockDate: boolean } | null>(null)
 
 // 追加時の日付の初期値。当月を見ているなら今日、過去や未来の月を見ているなら
 // その月の 1 日とする。いま画面に出ている月の日付が入るため、選び直す手間が減る。
@@ -75,24 +76,28 @@ const defaultDate = computed(() =>
   isCurrentMonth.value ? todayKey(now.value) : `${month.value}-01`,
 )
 
-/** 空の入力でダイアログを開く。 */
+/** 空の入力でダイアログを開く。どの日に記録するかはこれから決めるため、日付は選べる。 */
 function startAdding(): void {
   editing.value = {
-    date: defaultDate.value,
-    clockIn: '',
-    clockOut: '',
-    breakStart: '',
-    breakEnd: '',
+    entry: {
+      date: defaultDate.value,
+      clockIn: '',
+      clockOut: '',
+      breakStart: '',
+      breakEnd: '',
+    },
+    lockDate: false,
   }
 }
 
 /**
- * 既存の 1 日分を初期値としてダイアログを開く。
+ * 既存の 1 日分を初期値としてダイアログを開く。対象の日は決まっているため、
+ * 日付は変更できないようにする。
  *
  * @param day - 対象の日の集計
  */
 function startEditing(day: DaySummary): void {
-  editing.value = toDayEntry(day.date, day.punches).entry
+  editing.value = { entry: toDayEntry(day.date, day.punches).entry, lockDate: true }
 }
 
 /**
@@ -162,7 +167,8 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
          扱うときに古い時刻を保存してしまう。 -->
     <DayEntryDialog
       v-if="editing !== null"
-      :entry="editing"
+      :entry="editing.entry"
+      :lock-date="editing.lockDate"
       @submit="saveDay"
       @cancel="editing = null"
     />

@@ -25,6 +25,13 @@ const props = defineProps<{
    * よい。
    */
   entry: DayEntry
+  /**
+   * 日付の変更を禁じるかどうか。
+   *
+   * 一覧の「修正」から開いた場合は対象の日が決まっている。ここで日付を変えられる
+   * と、その日を直すつもりが別の日の記録を置き換えてしまう。追加のときだけ選ばせる。
+   */
+  lockDate: boolean
 }>()
 
 const emit = defineEmits<{
@@ -83,7 +90,7 @@ function submit(): void {
     <form id="day-entry" class="form" @submit.prevent="submit">
       <label>
         <span>日付</span>
-        <input v-model="date" type="date" required />
+        <input v-model="date" type="date" required :disabled="lockDate" />
       </label>
       <label>
         <span>出勤</span>
@@ -151,6 +158,13 @@ input {
   background: transparent;
   color: inherit;
   font-size: 1rem;
+}
+/* 変更できないことが見て分かるようにする。値は読めたままにしておく必要があるので、
+   薄くしすぎない。 */
+input:disabled {
+  border-style: dashed;
+  color: gray;
+  background: rgba(128, 128, 128, 0.08);
 }
 .hint {
   margin: 0.75rem 0 0;
