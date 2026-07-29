@@ -9,6 +9,7 @@ import { describeIssue } from '@/services/punchLabels'
 import {
   currentMonthKey,
   formatDateLabel,
+  formatDayInMonthLabel,
   formatDuration,
   formatMonthLabel,
   isMonthKey,
@@ -168,8 +169,11 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
 
     <ul v-if="hasRecords" class="days">
       <li v-for="day in summary.days" :key="day.date">
+        <!-- 日付は日と曜日だけにする。年と月は見出しに出ているため、ここで
+             繰り返すと狭い画面で行が折り返してしまう。読み上げには
+             aria-label で完全な日付を渡す。 -->
         <div class="row">
-          <span class="date">{{ formatDateLabel(day.date) }}</span>
+          <span class="date">{{ formatDayInMonthLabel(day.date) }}</span>
           <span class="worked">{{ formatDuration(day.workedMs) }}</span>
           <span class="break">休憩 {{ formatDuration(day.breakMs) }}</span>
           <button
@@ -292,26 +296,54 @@ function saveDay(date: string, punches: readonly PunchDraft[]): void {
   padding: 0.6rem 0;
   border-bottom: 1px solid rgba(128, 128, 128, 0.15);
 }
+/*
+ * 配置は grid で明示する。flex の折り返しに任せると、幅が足りなくなったときに
+ * 修正ボタンだけが次の行の左端へ落ちて、どの日のボタンか分からなくなる。
+ */
 .row {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  grid-template-areas: 'date worked break edit';
+  align-items: center;
+  gap: 0.2rem 0.6rem;
+}
+/* 各項目は途中で折り返さない。数字や曜日が分断されると読みにくくなる。 */
+.date,
+.worked,
+.break {
+  white-space: nowrap;
 }
 .date {
-  flex: 1;
-  min-width: 8rem;
+  grid-area: date;
+  min-width: 4.5rem;
 }
 .worked {
+  grid-area: worked;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 .break {
+  grid-area: break;
   font-size: 0.85rem;
   color: gray;
   font-variant-numeric: tabular-nums;
 }
 .edit {
+  grid-area: edit;
+}
+
+/* 幅が足りない端末では休憩を次の行へ送る。1 行に詰め込むと休憩の数値が
+   省略され、「休憩 …」とラベルだけが残ってしまう。 */
+@media (max-width: 23.5rem) {
+  .row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'date worked edit'
+      'break break break';
+  }
+}
+.edit {
+  justify-self: end;
   padding: 0.2rem 0.6rem;
   border-radius: 0.4rem;
   border: 1px solid rgba(128, 128, 128, 0.3);

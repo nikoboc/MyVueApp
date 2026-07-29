@@ -218,6 +218,25 @@ export function formatMonthLabel(month: string): string {
 }
 
 /**
+ * 日付キーを、月の中で使う短いラベルに整形する。
+ *
+ * 月次集計の一覧では、年と月が見出しに出ているため日だけで区別できる。狭い画面で
+ * 1 行に収めるために短くしている。
+ *
+ * @param date - "YYYY-MM-DD" 形式の日付キー
+ * @returns 「29日(水)」のような文字列。解析できない場合は入力をそのまま返す
+ */
+export function formatDayInMonthLabel(date: string): string {
+  const ms = parseDateTime(toDateTime(date, '00:00'))
+  if (ms === undefined) {
+    return date
+  }
+  const value = new Date(ms)
+  const weekday = WEEKDAY_LABELS[value.getDay()] ?? ''
+  return `${value.getDate()}日(${weekday})`
+}
+
+/**
  * 日付キーを表示用のラベルに整形する。
  *
  * @param date - "YYYY-MM-DD" 形式の日付キー
