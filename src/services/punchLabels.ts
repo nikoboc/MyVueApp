@@ -1,4 +1,4 @@
-import type { PunchIssue, PunchType, WorkStatus } from '@/types/attendance'
+import type { DayEntryIssue, PunchIssue, PunchType, WorkStatus } from '@/types/attendance'
 
 /**
  * 打刻の種別・勤務状態・不整合を表示用の文字列へ変換する。`services/` 配下の
@@ -44,5 +44,27 @@ export function describeIssue(issue: PunchIssue): string {
       return '対応する出勤がない退勤があります'
     case 'orphan-break-end':
       return '対応する休憩開始がない休憩終了があります'
+  }
+}
+
+/**
+ * 1 日分の入力に対する指摘を説明文へ変換する。
+ *
+ * `describeIssue` と同じく `switch` が判別子を網羅しているため、種類を追加すると
+ * コンパイラがこの関数の修正漏れを検出する。
+ *
+ * @param issue - 検出された指摘
+ * @returns 利用者に示す説明文
+ */
+export function describeDayEntryIssue(issue: DayEntryIssue): string {
+  switch (issue.kind) {
+    case 'clock-out-not-after-in':
+      return '退勤は出勤より後の時刻にしてください'
+    case 'incomplete-break':
+      return '休憩は開始と終了の両方を入力してください'
+    case 'break-end-not-after-start':
+      return '休憩終了は休憩開始より後の時刻にしてください'
+    case 'break-outside-work':
+      return '休憩は出勤から退勤までの間に収めてください'
   }
 }

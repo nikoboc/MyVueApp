@@ -60,6 +60,39 @@ export interface DaySummary {
   readonly issues: readonly PunchIssue[]
 }
 
+/** まだ id を持たない打刻。保存時にストアが id を付与する。 */
+export interface PunchDraft {
+  readonly type: PunchType
+  readonly at: string
+}
+
+/**
+ * 1 日分をまとめて入力するときの入力値。時刻は "HH:mm" 形式で、休憩は未入力なら
+ * 空文字とする。フォームの入力をそのまま受け取れる形にしてある。
+ */
+export interface DayEntry {
+  readonly date: string
+  readonly clockIn: string
+  readonly clockOut: string
+  readonly breakStart: string
+  readonly breakEnd: string
+}
+
+/** 1 日分の入力に対する指摘。 */
+export type DayEntryIssue =
+  | { readonly kind: 'clock-out-not-after-in' }
+  | { readonly kind: 'incomplete-break' }
+  | { readonly kind: 'break-end-not-after-start' }
+  | { readonly kind: 'break-outside-work' }
+
+/**
+ * 1 日分の入力を打刻へ変換した結果。判別可能なユニオンにすることで、成功時にだけ
+ * `punches` を、失敗時にだけ `issue` を参照できる（docs/05 §7）。
+ */
+export type DayEntryResult =
+  | { readonly ok: true; readonly punches: readonly PunchDraft[] }
+  | { readonly ok: false; readonly issue: DayEntryIssue }
+
 /** 1 か月分の集計。日ごとの集計をさらに合算したもの。 */
 export interface MonthSummary {
   /** 月キー "YYYY-MM"。 */

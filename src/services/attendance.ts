@@ -1,8 +1,11 @@
-import { parseDateTime, toDateKey, toMonthKey } from '@/services/time'
+import { parseDateTime, toDateKey, toDateTime, toMonthKey } from '@/services/time'
 import type {
+  DayEntry,
+  DayEntryResult,
   DaySummary,
   MonthSummary,
   Punch,
+  PunchDraft,
   PunchIssue,
   PunchType,
   WorkStatus,
@@ -184,6 +187,56 @@ export function summarizeMonth(month: string, days: readonly DaySummary[]): Mont
     issueDayCount: inMonth.filter((day) => 0 < day.issues.length).length,
     averageWorkedMs: dayCount < 1 ? 0 : Math.round(workedMs / dayCount),
   }
+}
+
+/**
+ * 1 日分の入力を打刻の列へ変換する。
+ *
+ * 出勤から退勤までをまとめて受け取り、順序の矛盾があれば打刻を作らずに指摘を返す。
+ * 4 件を 1 件ずつ追加する場合、途中の状態では「退勤がない」と警告が出るうえ、
+ * 入力を終えるまで矛盾に気づけない。まとめて検証することで、保存前に指摘できる。
+ *
+ * 時刻は桁数が固定された "HH:mm" 形式であるため、辞書順の比較がそのまま時刻の
+ * 前後関係になる。
+ *
+ * @param entry - フォームの入力値。休憩は未入力なら空文字
+ * @returns 変換した打刻、または最初に見つかった指摘
+ */
+export function buildDayPunches(entry: DayEntry): DayEntryResult {
+  const { date, clockIn, clockOut, breakStart, breakEnd } = entry
+
+  const hasBreakStart = 0 < breakStart.length
+  const hasBreakEnd = 0 < breakEnd.length
+  if (hasBreakStart !== hasBreakEnd) {
+    return { ok: false, issue: { kind: 'incomplete-break' } }
+  }
+
+  // 比較は小さい順に並べて条件が数直線と同じ向きになるようにし、満たすべき条件を
+  // 変数にしてから否定する（docs/05 §12）。
+  const isWorkOrdered = clockIn < clockOut
+  if (!isWorkOrdered) {
+    return { ok: false, issue: { kind: 'clock-out-not-after-in' } }
+  }
+
+  if (hasBreakStart) {
+    const isBreakOrdered = breakStart < breakEnd
+    if (!isBreakOrdered) {
+      return { ok: false, issue: { kind: 'break-end-not-after-start' } }
+    }
+    const isBreakInsideWork = clockIn <= breakStart && breakEnd <= clockOut
+    if (!isBreakInsideWork) {
+      return { ok: false, issue: { kind: 'break-outside-work' } }
+    }
+  }
+
+  const punches: PunchDraft[] = [{ type: 'clock-in', at: toDateTime(date, clockIn) }]
+  if (hasBreakStart) {
+    punches.push({ type: 'break-start', at: toDateTime(date, breakStart) })
+    punches.push({ type: 'break-end', at: toDateTime(date, breakEnd) })
+  }
+  punches.push({ type: 'clock-out', at: toDateTime(date, clockOut) })
+
+  return { ok: true, punches }
 }
 
 /**

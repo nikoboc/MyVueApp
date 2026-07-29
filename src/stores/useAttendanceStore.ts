@@ -3,8 +3,14 @@ import { computed, ref, watch } from 'vue'
 
 import { summarizeByDate, summarizeDay, summarizeMonth } from '@/services/attendance'
 import { createPunchId, loadPunches, savePunches } from '@/services/punchStorage'
-import { formatDateTime, parseDateTime } from '@/services/time'
-import type { DaySummary, MonthSummary, Punch, PunchType } from '@/types/attendance'
+import { formatDateTime, parseDateTime, toDateKey } from '@/services/time'
+import type {
+  DaySummary,
+  MonthSummary,
+  Punch,
+  PunchDraft,
+  PunchType,
+} from '@/types/attendance'
 
 /**
  * 打刻を保持する中心のストア。状態はここに集約され、コンポーネントはここから
@@ -120,6 +126,30 @@ export const useAttendanceStore = defineStore('attendance', () => {
   }
 
   /**
+   * 指定した日の打刻をまとめて置き換える。1 日分を一度に入力する場合に用いる。
+   *
+   * 既存の打刻を残したまま追加すると、出勤が 2 件並ぶなどの矛盾が生じる。
+   * 「その日の記録はこれである」という入力なので、置き換えを正しい動作とする。
+   * 置き換えの確認は呼び出し側が行う。
+   *
+   * @param date - 対象の日付キー "YYYY-MM-DD"
+   * @param drafts - その日の打刻。空配列を渡すとその日の記録を消す
+   * @returns 置き換えられた場合は true。時刻が不正な場合は false
+   */
+  function replaceDay(date: string, drafts: readonly PunchDraft[]): boolean {
+    if (drafts.some((draft) => parseDateTime(draft.at) === undefined)) {
+      error.value = '時刻の形式が正しくありません'
+      return false
+    }
+    const others = punches.value.filter((punch) => toDateKey(punch.at) !== date)
+    punches.value = [
+      ...others,
+      ...drafts.map((draft) => ({ id: createPunchId(), type: draft.type, at: draft.at })),
+    ]
+    return true
+  }
+
+  /**
    * 打刻を削除する。誤って記録した打刻を取り消す場合に用いる。
    *
    * @param id - 対象の `Punch.id`
@@ -137,6 +167,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     punch,
     addPunch,
     updatePunch,
+    replaceDay,
     removePunch,
   }
 })
