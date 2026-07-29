@@ -56,19 +56,19 @@ TypeScript を採用している理由がここにある。
 
 ## 2. type と interface の使い分け
 
-- オブジェクトおよびドメインの構造には **`interface`** を用いる（`Location`、`Forecast` など）。
+- オブジェクトおよびドメインの構造には **`interface`** を用いる（`Punch`、`DaySummary` など）。
   Java のクラスの構造に最も近く、宣言のマージにも対応する。
 - ユニオン、プリミティブ、タプル、関数型、ユーティリティ型の合成には **`type`** を用いる。
 
 ```ts
-interface Location { id: string; name: string }        // オブジェクトの構造
-type Units = "metric" | "imperial"                      // ユニオン。interface では表現できない
-type Coord = [number, number]                            // タプル
-type Fetcher = (loc: Location) => Promise<Forecast>      // 関数型
+interface Punch { id: string; at: string }                     // オブジェクトの構造
+type WorkStatus = "working" | "on-break"                        // ユニオン。interface では表現できない
+type Range = [number, number]                                   // タプル
+type Summarizer = (punches: readonly Punch[]) => DaySummary     // 関数型
 ```
 
-インターフェースに `I` は付けない。`ILocation` のような命名は C# や一部の Java 環境の慣習であり、
-TypeScript では `Location` と記述する。型名は `PascalCase` とする（命名規約は §16）。
+インターフェースに `I` は付けない。`IPunch` のような命名は C# や一部の Java 環境の慣習であり、
+TypeScript では `Punch` と記述する。型名は `PascalCase` とする（命名規約は §16）。
 
 ## 3. `enum` ではなく文字列リテラルのユニオンを用いる
 
@@ -77,17 +77,19 @@ Java の `enum` に相当する場面では、TypeScript ではユニオン型�
 
 ```ts
 // ✅ 推奨
-type WeatherView = "hourly" | "daily"
+type WorkStatus = "before-work" | "working" | "on-break" | "after-work"
 
 // ⚠️ 実行時に enum オブジェクトが必要な場合を除き、使用しない
-enum WeatherViewEnum { Hourly, Daily }
+enum WorkStatusEnum { BeforeWork, Working }
 ```
 
-固定された集合を実行時にも値のリストとして保持する場合は `as const` を用いる。
+固定された集合を実行時にも値のリストとして保持する場合は `as const` を用いる。本プロジェクトの
+`PunchType` はこの形で定義している。画面のボタンを打刻の種別から生成するため、実行時にも一覧が必要と
+なるからである。
 
 ```ts
-export const UNITS = ["metric", "imperial"] as const
-export type Units = (typeof UNITS)[number]   // "metric" | "imperial"
+export const PUNCH_TYPES = ["clock-in", "break-start", "break-end", "clock-out"] as const
+export type PunchType = (typeof PUNCH_TYPES)[number]   // "clock-in" | ... | "clock-out"
 ```
 
 ## 4. null と undefined — 既定の「値なし」は `undefined`
@@ -95,12 +97,13 @@ export type Units = (typeof UNITS)[number]   // "metric" | "imperial"
 Java には `null` のみが存在するが、TypeScript には `null` と `undefined` の両方がある。TypeScript で
 一般的に用いられるのは `undefined` である（プロパティが存在しない、戻り値がない、など）。`null` は
 「意図的に空にした」ことを表す場合に限って用いる。本プロジェクトでは **`undefined` を基本**とし、
-`null` は値が意味的にクリアされた場合にのみ使用する（`error: string | null` など）。
+`null` は値が意味的にクリアされた場合にのみ使用する（`error: string | null`、および `PunchForm` の
+`punch: Punch | null` が該当する）。
 
 ```ts
-function find(id: string): Location | undefined { /* ... */ }
+function findPunch(id: string): Punch | undefined { /* ... */ }
 
-const name = loc?.name ?? "不明"   // オプショナルチェーンと null 合体演算子
+const label = punch?.type ?? "不明"   // オプショナルチェーンと null 合体演算子
 ```
 
 - `?.` はオプショナルチェーンであり、null または undefined の時点で評価を打ち切る。null セーフな
@@ -118,11 +121,10 @@ Java はすべての箇所に型の記述を要求するが、TypeScript の型�
 
 ```ts
 // ✅ シグネチャ（＝契約）は明示し、ローカル変数は推論に委ねる
-export async function getForecast(loc: Location): Promise<Forecast> {
-  const url = buildUrl(loc)           // string と推論されるため、型注釈は不要
-  const res = await fetch(url)        // Response と推論される
-  const json = await res.json()       // any になる。§6 のとおり、そのままにはしない
-  return mapForecast(json)
+export function summarizeDay(date: string, punches: readonly Punch[]): DaySummary {
+  const ordered = sortByTime(punches)     // Punch[] と推論されるため、型注釈は不要
+  const issues: PunchIssue[] = []         // 空配列は型が定まらないため注釈する
+  // ...
 }
 ```
 
@@ -131,22 +133,22 @@ export した関数に戻り値の型を明記するのは意図的な規則で�
 
 ## 6. `any` を禁止し、型のない境界では `unknown` を用いる
 
-`any` を使用すると、その箇所で型チェックが機能しなくなる。`res.json()` の戻り値は `any` であるため、
-受け取った直後に処理する。外部から取得したデータはいったん `unknown` として扱い、検証または
-絞り込みを経てから使用する。
+`any` を使用すると、その箇所で型チェックが機能しなくなる。本プロジェクトで型のない値が入ってくる
+境界は `localStorage` である。`JSON.parse` の戻り値は `any` であるため、受け取った直後に `unknown`
+として扱い、検証を経てから使用する。
 
 ```ts
-const json: unknown = await res.json()
-// この後に絞り込む。フィールドをガードするか、
-// 本プロジェクトでは学習用と割り切って生のレスポンス型にアサートする
+const parsed: unknown = JSON.parse(raw)
+return Array.isArray(parsed) ? parsed.filter(isPunch) : []
 ```
 
 - `unknown` は「型が未確定であり、使用前に確認を要する」ことを表す。安全側に倒した型である。
 - `any` は「その箇所で型チェックを無効化する」ことを意味するため使用しない。やむを得ない場合は
   `// eslint-disable` と理由を併記する。
 - 型アサーション（`x as Foo`）は最終手段である。検証を伴わずに型を断定するにすぎないため、通常は
-  型ガードや `in`、`typeof`、`Array.isArray` による絞り込みを用いる。`as` を使うのは、検証済みの
-  API DTO のように、コンパイラより確実な情報を持っている場合に限る。
+  型ガードや `in`、`typeof`、`Array.isArray` による絞り込みを用いる。`punchStorage.ts` の `isPunch` が
+  型ガードの例であり、`as Record<string, unknown>` を挟むのは各フィールドを個別に確認するための
+  前段としてである。
 
 ## 7. 状態は判別可能なユニオンで表現する
 
@@ -154,25 +156,28 @@ const json: unknown = await res.json()
 対するパターンマッチと同じ役割を、より簡潔に記述できる。共通のリテラルフィールド（*判別子*）を
 持たせることで、コンパイラが網羅的に型を絞り込む。
 
-```ts
-type LoadState<T> =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; data: T }
-  | { status: "error"; message: string }
+本プロジェクトでは打刻の不整合をこの形で表している。
 
-function render(s: LoadState<Forecast>) {
-  switch (s.status) {
-    case "idle":    return "—"
-    case "loading": return "読み込み中…"
-    case "success": return s.data.current.temperature   // この分岐では data の存在が保証される
-    case "error":   return s.message                     // この分岐では message が存在する
+```ts
+export type PunchIssue =
+  | { readonly kind: "unclosed-work" }
+  | { readonly kind: "unclosed-break" }
+  | { readonly kind: "orphan-clock-out" }
+  | { readonly kind: "orphan-break-end" }
+
+export function describeIssue(issue: PunchIssue): string {
+  switch (issue.kind) {
+    case "unclosed-work":    return "退勤の打刻がありません"
+    case "unclosed-break":   return "休憩終了の打刻がありません"
+    case "orphan-clock-out": return "対応する出勤がない退勤があります"
+    case "orphan-break-end": return "対応する休憩開始がない休憩終了があります"
   }
 }
 ```
 
-この形式では、不正な状態そのものが表現できなくなる。`data` を持たない `status: "success"` は構築
-できない。`isLoading`、`hasError`、`data?` のような真偽値の組み合わせよりも、この表現を優先する。
+`switch` が判別子をすべて網羅しているため、`PunchIssue` に種類を追加すると戻り値の型が合わなくなり、
+コンパイラがこの関数の修正漏れを検出する。不正な状態そのものを表現できなくする点も重要であり、
+真偽値の組み合わせ（`hasError`、`isMissing` など）よりもこの表現を優先する。
 
 ## 8. イミュータビリティ
 
@@ -180,11 +185,15 @@ function render(s: LoadState<Forecast>) {
 `readonly T[]` または `ReadonlyArray<T>` を用いる。
 
 ```ts
-interface Location {
+interface Punch {
   readonly id: string
-  readonly latitude: number
+  readonly type: PunchType
+  readonly at: string
 }
 ```
+
+集計処理が受け取る打刻も `readonly Punch[]` としている。入力を書き換えないことが型として保証され、
+呼び出し側は渡した配列がそのまま残ることを前提にできる。
 
 ## 9. ジェネリクスとユーティリティ型
 
@@ -193,11 +202,14 @@ interface Location {
 
 | ユーティリティ | 効果 | 例 |
 |---------|------|---------|
-| `Partial<T>` | 全フィールドを省略可能にする | パッチ用の `Partial<Location>` |
-| `Pick<T, K>` | 一部のフィールドのみ残す | `Pick<Forecast, "current">` |
-| `Omit<T, K>` | 一部のフィールドを除外する | 新規地点の入力用の `Omit<Location, "id">` |
-| `Record<K, V>` | マップおよび辞書の型 | `Record<string, Forecast>`（本プロジェクトの forecasts） |
-| `Readonly<T>` | 全フィールドを readonly にする | `Readonly<Location>` |
+| `Partial<T>` | 全フィールドを省略可能にする | 部分更新用の `Partial<Punch>` |
+| `Pick<T, K>` | 一部のフィールドのみ残す | `Pick<DaySummary, "workedMs">` |
+| `Omit<T, K>` | 一部のフィールドを除外する | 新規打刻の入力用の `Omit<Punch, "id">` |
+| `Record<K, V>` | マップおよび辞書の型 | `Record<PunchType, string>`（表示名の対応表） |
+| `Readonly<T>` | 全フィールドを readonly にする | `Readonly<DaySummary>` |
+
+`Record<PunchType, string>` は `punchLabels.ts` で実際に用いている。キーがユニオン型であるため、
+打刻の種別を追加すると対応表の記述漏れをコンパイラが検出する。
 
 ## 10. モジュールと import
 
@@ -206,14 +218,16 @@ interface Location {
 - 型のみを import する場合は **`import type`** を用いる。JavaScript の出力から除去されるためである。
 
 ```ts
-import type { Location, Forecast } from "@/types/weather"
-import { getForecast } from "@/services/weatherApi"
+import type { DaySummary, Punch } from "@/types/attendance"
+import { summarizeDay } from "@/services/attendance"
 ```
 
 - `src/` 配下の import には `@/` のパスエイリアス（Vite および tsconfig で設定済み）を用い、
   `../../..` の連鎖は記述しない。
 
 ## 11. 非同期処理とエラー処理
+
+本アプリケーションは通信を行わないため非同期処理はほとんど現れないが、規約は次のとおりである。
 
 - 非同期処理は `Promise<T>` と `async`/`await` で記述する。`CompletableFuture` に相当するが、記法は
   より簡潔である。
@@ -222,28 +236,31 @@ import { getForecast } from "@/services/weatherApi"
 
 ```ts
 try {
-  await getForecast(loc)
+  savePunches(value)
 } catch (e) {
-  const message = e instanceof Error ? e.message : "不明なエラー"
+  error.value = e instanceof Error ? e.message : "保存に失敗しました"
 }
 ```
 
 - エラーを握りつぶさない。ストアの状態に反映し（`error.value = ...`）、UI が反応できるようにする。
+  ただし起動時の読み込みは例外であり、壊れたデータでアプリが使えなくなることを避けるため空の状態と
+  して扱う。この判断の理由は `punchStorage.ts` のコメントに記載している。
 
 ## 12. 演算子・等値比較・スタイル
 
 - **等値比較には `===` / `!==` を使う。** `==` は意図しない型変換を伴うため使用しない。例外は認めない。
-- **既定は `const` とする。** 再代入が必要な場合にのみ `let` を用い、`var` は使用しない。
+- **既定は `const` とする。** 再代入が必要な場合にのみ `let` を用い、`var` は使用しない。集計処理の
+  ループ内で積算する変数は、再代入が本質であるため `let` が適切である。
 - コールバックおよびインライン関数にはアロー関数を用いる。`this` の挙動は Java と異なるが、
   `<script setup>` および Pinia の setup ストアでは `this` を扱う場面はほとんどない。
 
 **`>` `>=` ではなく `<` `<=` を用いる。** 小さい値を左に置き、式が数直線と同じ並びになるようにする。
 
 ```ts
-if (temperature < threshold) { /* ... */ }        // ✅
-if (0 <= i && i < items.length) { /* ... */ }      // ✅ 範囲の判定が左から右へ自然に読める
+if (0 < summary.issues.length) { /* ... */ }        // ✅
+if (0 <= i && i < punches.length) { /* ... */ }      // ✅ 範囲の判定が左から右へ自然に読める
 
-if (threshold > temperature) { /* ... */ }         // ⚠️ 意味は同じだが、読む向きが逆になる
+if (summary.issues.length > 0) { /* ... */ }         // ⚠️ 意味は同じだが、読む向きが逆になる
 ```
 
 ## 13. ループではなく配列メソッドを用いる
@@ -253,17 +270,17 @@ Java の Stream に相当する記法である。配列に `push` していく `
 起因するバグも避けられる。新しい配列を返すため、§8 のイミュータビリティとも整合する。
 
 ```ts
-const temperatures = [18, 22, 15, 27, 20]
+const workedMinutes = [495, 462, 510, 438]
 
 // ✅ Java の Stream パイプラインと同様に、途中経過を保持する変数を必要としない
-const warmLabels = temperatures
-  .filter(t => 20 <= t)
-  .map(t => `${t}°C`)
+const longDays = workedMinutes
+  .filter((minutes) => 480 <= minutes)
+  .map((minutes) => `${Math.floor(minutes / 60)}時間${minutes % 60}分`)
 
 // ⚠️ 単純な変換にこの記法は用いない
-const warmLabels2: string[] = []
-for (const t of temperatures) {
-  if (20 <= t) warmLabels2.push(`${t}°C`)
+const longDays2: string[] = []
+for (const minutes of workedMinutes) {
+  if (480 <= minutes) longDays2.push(`${Math.floor(minutes / 60)}時間${minutes % 60}分`)
 }
 ```
 
@@ -282,9 +299,9 @@ Java Stream と TypeScript の配列メソッドの対応は次のとおりで�
 | `collect(toList())` | （すでに配列である） |
 
 **ループが適する場面もある。** `break` や `continue` を要する場合、および要素ごとに逐次 `await` する
-場合（`.forEach` の内部では `await` が正しく機能しない）は `for...of` を用いる。また、`reduce` を
-一行に詰め込んで可読性を損なうくらいであれば、ループのほうが望ましい。ただし単純な map/filter/find
-については、配列メソッドを既定とする。
+場合（`.forEach` の内部では `await` が正しく機能しない）は `for...of` を用いる。`summarizeDay` が
+`for...of` で打刻をたどっているのも適切な使用例である。直前までの状態（勤務の開始時刻など）を保持
+しながら順に処理する必要があり、配列メソッドでは表現しにくいためである。
 
 ## 14. ドキュメントとコメント
 
@@ -294,20 +311,20 @@ Java Stream と TypeScript の配列メソッドの対応は次のとおりで�
 
 ```ts
 /**
- * 指定した地点の現在・時間別・日別の予報を取得し、正規化する。
+ * 1 日分の打刻を集計する。
  *
- * @param loc - ジオコーディング済みの、天気を取得する地点
- * @returns マッピング後のドメインの予報データ
- * @throws Open-Meteo へのリクエストが失敗した場合、または想定外の形式が返された場合
+ * @param date - 対象の日付キー "YYYY-MM-DD"
+ * @param punches - その日の打刻。順序は問わない
+ * @returns 集計結果
  */
-export async function getForecast(loc: Location): Promise<Forecast> { /* ... */ }
+export function summarizeDay(date: string, punches: readonly Punch[]): DaySummary { /* ... */ }
 ```
 
 **コメントには「何を」ではなく「なぜ」を記述する。**
 
 - *何を*しているかはコードから読み取れる。コメントに記述するのは*意図*である。その方法を選んだ理由、
-  トレードオフ、自明でない制約、外部サービスの特性（例:「Open-Meteo は該当が無いと `results` 自体を
-  返さない」）などが対象となる。
+  トレードオフ、自明でない制約などが対象となる（例:「集計が現在時刻を参照しないのは、入力だけで
+  結果が決まる純粋な関数に保つためである」）。
 - コメントの内容は正確かつ最新の状態に保つ。古いコメントは無いよりも有害であるため、コードの変更に
   合わせて修正または削除する。
 - 自明な内容は記述しない（`// i をインクリメント`）。コードの理解のためだけにコメントを要する場合は、
@@ -320,20 +337,23 @@ export async function getForecast(loc: Location): Promise<Forecast> { /* ... */ 
 
 ```ts
 // リアクティブな ref は型を保持する
-const count = ref<number>(0)                 // Ref<number>。初期値から推論される場合も多い
-const locations = ref<Location[]>([])
+const editingId = ref<string | null>(null)   // 初期値だけでは型が定まらないため注釈する
+const punches = ref<Punch[]>([])
 
 // 型付きの props。コンパイル時のみで、実行時の宣言は不要
-const props = defineProps<{ location: Location; compact?: boolean }>()
+const props = defineProps<{ summary: DaySummary }>()
 
 // 型付きの emit
-const emit = defineEmits<{ (e: "remove", id: string): void }>()
+const emit = defineEmits<{
+  (e: "edit", id: string): void
+  (e: "remove", id: string): void
+}>()
 
 // Pinia の setup ストア。state/getters/actions はすべて推論され、型が付与される
 // （ストア全体は docs/03-state-and-data.md を参照）
 ```
 
-初期値だけでは型が確定しない場合（`ref<Location[]>([])` や `null` で初期化する ref など）は
+初期値だけでは型が確定しない場合（`ref<Punch[]>([])` や `null` で初期化する ref など）は
 `ref`/`computed` に型を記述し、それ以外は推論に委ねる。
 
 ## 16. 命名規約
@@ -343,14 +363,14 @@ const emit = defineEmits<{ (e: "remove", id: string): void }>()
 
 | 種類 | ケース | 例 |
 |------|------|---------|
-| 変数、引数、オブジェクトのプロパティ | `camelCase` | `currentTemp`、`fetchedAt` |
-| 関数・メソッド | `camelCase`、動詞から始める | `getForecast`、`mapLocation`、`formatTime` |
-| 型、インターフェース、クラス、enum | `PascalCase` | `Location`、`Forecast`、`WeatherView` |
-| enum のメンバー | `PascalCase` | `WeatherView.Hourly` |
-| モジュールレベルの定数 | `UPPER_SNAKE_CASE` | `MAX_LOCATIONS`、`DEFAULT_REFRESH_MS` |
+| 変数、引数、オブジェクトのプロパティ | `camelCase` | `workedMs`、`editingId` |
+| 関数・メソッド | `camelCase`、動詞から始める | `summarizeDay`、`parseDateTime`、`formatDuration` |
+| 型、インターフェース、クラス、enum | `PascalCase` | `Punch`、`DaySummary`、`WorkStatus` |
+| enum のメンバー | `PascalCase` | `WorkStatus.Working` |
+| モジュールレベルの定数 | `UPPER_SNAKE_CASE` | `PUNCH_TYPES`、`DEFAULT_INTERVAL_MS` |
 | ジェネリック型引数 | `PascalCase`、意味の分かる名前 | `TItem`、`TResponse`（自明な場合は `T`） |
-| Vue コンポーネント | `PascalCase` | `LocationCard.vue` |
-| ファイル（コンポーネント以外） | `CLAUDE.md` を参照 | `weatherApi.ts`、`useWeatherStore.ts` |
+| Vue コンポーネント | `PascalCase` | `DayCard.vue` |
+| ファイル（コンポーネント以外） | `CLAUDE.md` を参照 | `punchStorage.ts`、`useAttendanceStore.ts` |
 
 **個別の注意点は次のとおりである。**
 
@@ -358,19 +378,21 @@ const emit = defineEmits<{ (e: "remove", id: string): void }>()
   `PascalCase` とし、`I` を付けないことである（§2）。
 - **定数について。** `UPPER_SNAKE_CASE` を用いるのは真の固定値に限る（設定値、および名前を与えた
   マジックナンバー）。Java の `static final` に相当する。ローカルの値を保持するだけの `const` は
-  `camelCase` のままとする。すなわち `const MAX_LOCATIONS = 8` は `UPPER_SNAKE` とするが、
-  `const forecast = await getForecast(loc)` は `camelCase` とする。
-- **真偽値は可否を問う形の名前とする。** `is` / `has` / `should` / `can` を接頭辞に用い、`isLoading`、
-  `hasData`、`shouldRefresh` のように命名する。否定形は避ける（`isNotReady` ではなく `isReady`）。
-- **関数は動詞から始める。** `getForecast`、`buildUrl`、`mapCurrent`、`removeLocation` などである。
-  Java Bean と異なり TypeScript ではプロパティを `get` なしで参照するが（`loc.getName()` ではなく
-  `loc.name`）、処理を伴う関数は動詞で始める。
+  `camelCase` のままとする。すなわち `const DEFAULT_INTERVAL_MS = 1000` は `UPPER_SNAKE` とするが、
+  `const ordered = sortByTime(punches)` は `camelCase` とする。
+- **真偽値は可否を問う形の名前とする。** `is` / `has` / `should` / `can` を接頭辞に用い、`isAdding`、
+  `isRunning`、`canPunch` のように命名する。否定形は避ける（`isNotReady` ではなく `isReady`）。
+- **関数は動詞から始める。** `summarizeDay`、`loadPunches`、`formatDuration`、`removePunch` などで
+  ある。Java Bean と異なり TypeScript ではプロパティを `get` なしで参照するが（`punch.getType()` では
+  なく `punch.type`）、処理を伴う関数は動詞で始める。
 - **ハンガリアン記法および型の接頭辞は用いない。** インターフェースの `I`、型エイリアスの `T`、
   `str`/`arr` などは付けない。型の情報は型システムが保持しているため、名前に含める必要はない。
-- **省略形による可読性の低下を避ける。** `tmp` ではなく `temperature`、`idx` ではなく `index` を
-  用いる（ごく狭いスコープのループ変数 `i` は許容する）。名前は仕様を伝える情報でもある。
-- **コンポーザブルとストア**は `CLAUDE.md` に従い、`useX`（`useAutoRefresh`）、`useXStore`
-  （`useWeatherStore`）とする。`use` は、リアクティブな状態を扱うことを示す Vue の慣習である。
+- **省略形による可読性の低下を避ける。** `dur` ではなく `duration`、`idx` ではなく `index` を用いる
+  （ごく狭いスコープのループ変数 `i` は許容する）。名前は仕様を伝える情報でもある。
+- **単位を名前に含める。** ミリ秒を保持する値は `workedMs`、`intervalMs` のように末尾へ単位を付ける。
+  数値型だけでは単位が判別できず、秒とミリ秒の取り違えは実際に起こりやすい。
+- **コンポーザブルとストア**は `CLAUDE.md` に従い、`useX`（`useAutoRefresh`、`useNow`）、`useXStore`
+  （`useAttendanceStore`）とする。`use` は、リアクティブな状態を扱うことを示す Vue の慣習である。
 - **emit するイベント名**は動詞を基本とし、呼び出し側およびハンドラー側では `kebab-case` とする。
   `emit('remove', id)` を `@remove` で受ける。
 

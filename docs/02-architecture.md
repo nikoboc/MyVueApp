@@ -8,11 +8,10 @@
 | 言語 | **TypeScript** | Java の静的型付け |
 | UI フレームワーク | **Vue 3**（Composition API、`<script setup>`） | ビューとリアクティビティのエンジン |
 | 状態管理 | **Pinia** | 状態を保持する `@Service`／シングルトン Bean |
-| HTTP | **`fetch`**（サービス層でラップする） | `RestTemplate` / `HttpClient` |
-| グラフ | **Chart.js**（`vue-chartjs` 経由） | 帳票・チャート作成ライブラリ |
+| 保存先 | **`localStorage`**（サービス層でラップする） | リポジトリの実装 |
 
 依存関係は意図的に最小限としている。UI コンポーネントライブラリは導入せず、画面が単一であるため
-ルーターも使用しない。必要が生じた時点で追加する。
+ルーターも使用しない。HTTP クライアントも不要である。必要が生じた時点で追加する。
 
 ## ディレクトリ構成
 
@@ -20,46 +19,58 @@
 src/
   main.ts                  # エントリポイント。app の生成、Pinia の install、mount
   App.vue                  # ルートコンポーネント。全体のレイアウト
-  assets/                  # CSS、静的ファイル
   types/
-    weather.ts             # API データおよびドメインモデルの型定義
+    attendance.ts          # ドメインモデルの型定義
   services/
-    weatherApi.ts          # Open-Meteo の呼び出し（ジオコーディングと予報）。Vue を含めない
-    weatherCodes.ts        # WMO 天気コードからラベルとアイコンへの変換
+    attendance.ts          # 打刻から勤務時間を導出する集計処理
+    punchStorage.ts        # localStorage への保存と読み込み、および検証
+    punchLabels.ts         # 種別・状態・不整合の表示名
+    time.ts                # 日時の解析と整形
   stores/
-    useWeatherStore.ts     # Pinia ストア。地点、予報、アクション、更新
-    useSettingsStore.ts    # Pinia ストア。単位、テーマ（ストレッチ）
+    useAttendanceStore.ts  # Pinia ストア。打刻、集計、アクション
   components/
-    LocationSearch.vue     # 検索入力と結果のドロップダウン
-    LocationCard.vue       # 1 都市分。現在の気象状況とグラフ
-    CurrentConditions.vue  # 気温・湿度・風速の表示
-    HourlyChart.vue        # 24 時間の折れ線グラフ
-    DailyChart.vue         # 7 日間のグラフ（ストレッチ）
-    BaseSpinner.vue        # 再利用可能なローディング表示
+    PunchPanel.vue         # 今日の打刻。時計、状態、4 つのボタン
+    DayCard.vue            # 1 日分の記録。集計と打刻一覧
+    PunchRow.vue           # 打刻 1 件の表示
+    PunchForm.vue          # 打刻の追加・修正フォーム
   composables/
-    useAutoRefresh.ts      # クリーンアップを含む、再利用可能な定期実行処理（ストレッチ）
+    useAutoRefresh.ts      # クリーンアップを含む、再利用可能な定期実行処理
+    useNow.ts              # 一定間隔で更新される現在時刻
+
+public/                    # そのまま配信されるファイル。ビルド時に変換されない
+  sw.js                    # オフライン動作のための Service Worker
+  manifest.webmanifest     # ホーム画面へ追加したときの設定
+  icon-192.png / icon-512.png / apple-touch-icon.png / icon.svg
+scripts/
+  generate-sw-precache.mjs # ビルド後に sw.js へ先読み対象の一覧を埋め込む
+.github/workflows/
+  deploy.yml               # main への push で GitHub Pages へ公開する
 ```
 
 **設計方針: サービス層に Vue を含めない。** `services/` と `types/` は Vue を一切 import しない純粋な
-TypeScript とする。単体テストが可能であり、他のプロジェクトへの再利用もできる。Vue のリアクティビティが
-関与するのは、ストアとコンポーネントに限られる。ドメイン層およびサービス層を Web フレームワークから
-分離する考え方と同一である。
+TypeScript とする。とくに `services/attendance.ts` の集計処理は本アプリケーションの中核であり、
+コンポーネントをマウントせずに単体テストできる。Vue のリアクティビティが関与するのは、ストアと
+コンポーネントに限られる。ドメイン層およびサービス層を Web フレームワークから分離する考え方と同一で
+ある。
 
 ## コンポーネントツリー
 
 ```
 App.vue
-├── LocationSearch.vue        (都市をストアに追加する)
-└── store.locations を v-for:
-    └── LocationCard.vue      (props: location)
-        ├── CurrentConditions.vue   (props: 現在のデータ)
-        ├── HourlyChart.vue         (props: 時間別データ)
-        └── DailyChart.vue          (props: 日別データ)   ← ストレッチ
+├── PunchPanel.vue            (今日の打刻。ストアのアクションを直接呼ぶ)
+└── store.days を v-for:
+    └── DayCard.vue           (props: summary)
+        ├── PunchRow.vue      (props: punch / emit: edit, remove)
+        └── PunchForm.vue     (props: punch / emit: submit, cancel)
 ```
 
 コンポーネントは可能な限り表示に専念させる。データは **props** で受け取り、上位へは**イベント**で
-伝達する。API を直接呼び出すことはせず、ストアに委譲する。これが「props down, events up」の原則であり、
-Vue アプリケーションの追跡可能性を支えている。
+伝達する。これが「props down, events up」の原則である。
+
+ただし `PunchPanel` と `DayCard` は例外的にストアのアクションを直接呼ぶ。前者は打刻という単一の操作
+しか持たず、後者は 1 日の記録を管理する主体だからである。打刻ごとの操作をすべて `App` まで持ち上げ
+ると、中継するだけの emit が増えて流れが追いにくくなる。末端の `PunchRow` と `PunchForm` は状態を
+変更せず、意図を emit するだけにとどめている。
 
 ## データフロー
 
@@ -67,38 +78,49 @@ Vue アプリケーションの追跡可能性を支えている。
 
 ```
                     ┌─────────────────────────────┐
-   ユーザーが都市を入力  │        LocationSearch        │
-  ─────────────────▶│  store.addLocation() を呼ぶ    │
+   出勤ボタンを押す    │         PunchPanel           │
+  ─────────────────▶│  store.punch('clock-in')     │
                     └───────────────┬──────────────┘
                                     │ アクション
                                     ▼
         ┌───────────────────────────────────────────────┐
-        │              useWeatherStore (Pinia)           │
-        │  state: locations[], forecasts{}, loading, err │
-        │  action addLocation():                         │
-        │     → weatherApi.geocode()                     │
-        │     → weatherApi.getForecast()                 │
-        │     → 状態を変更（リアクティブ）                   │
+        │           useAttendanceStore (Pinia)           │
+        │  state: punches[]                              │
+        │  action punch():                               │
+        │     → 打刻を 1 件追加するだけ                     │
+        │  getter days:                                  │
+        │     → services/attendance.ts で集計を導出        │
         └───────────────┬───────────────────────────────┘
                         │ 状態の変更が自動的に伝播する
+                        ├──────────────▶ watch → localStorage へ保存
                         ▼
         ┌───────────────────────────────────────────────┐
-        │  コンポーネントはストアの状態を読み、自動的に         │
-        │  再描画される。DOM を直接操作することはない。        │
+        │  コンポーネントは集計を読み、自動的に再描画される      │
+        │  DOM を直接操作することはない                      │
         └───────────────────────────────────────────────┘
 ```
 
-重要な点は、**コンポーネントが状態を直接変更せず、API も直接呼び出さない**ことである。コンポーネントが
-行うのはアクションの起動のみであり、非同期処理と状態の更新はアクションが担当する。その結果として画面が
-再描画される。流れは常に一方向となる。表示に不整合がある場合、調査対象は DOM ではなくストアである。
+重要な点は、**アクションが行うのは打刻の追加・修正・削除だけ**であることである。実働時間も勤務状態も
+アクションの中では計算せず、`days` の導出時にまとめて算出する。そのため打刻をどう変更しても、集計が
+古いままになることがない。
+
+## 集計を保存しない理由
+
+打刻と集計の両方を保存する設計も考えられるが、その場合は打刻を修正するたびに集計を更新する処理が
+必要になる。更新を忘れれば両者が食い違い、どちらが正しいのか判断できなくなる。
+
+導出値を保存しなければ、この不整合はそもそも発生しない。集計は入力（打刻の列）だけで決まる純粋な
+関数の結果であり、常に最新の打刻と一致する。Java において、算出可能な値をフィールドとして持たず
+ゲッターで計算するのと同じ判断である。
 
 ## リアクティビティの仕組み（Java エンジニア向け）
 
-Java において `int temp = 20;` を画面に描画した後で `temp` を変更しても、UI は変化しない。再描画を
-明示的に行う必要がある。Vue は状態をリアクティブなプロキシでラップすることで、この処理を自動化している。
+Java において `int total = 20;` を画面に描画した後で `total` を変更しても、UI は変化しない。再描画を
+明示的に行う必要がある。Vue は状態をリアクティブなプロキシでラップすることで、この処理を自動化して
+いる。
 
-コンポーネントのテンプレートで `store.temp` を参照すると、Vue は「このコンポーネントは `temp` に依存する」
-という関係を記録する。その後に値が代入されると、再実行すべきコンポーネントが特定できる。
-`computed(() => a + b)` は入力が変化するまで結果をキャッシュする導出値であり、キャッシュ付きのゲッターに
-相当する。`watch(source, cb)` は値の変化を監視して副作用を実行するものであり、「都市が変わったら再取得する」
-といった処理に用いる。リアクティビティの仕組みはこれで全体である。
+コンポーネントのテンプレートで `store.days` を参照すると、Vue は「このコンポーネントは `days` に依存
+する」という関係を記録する。`days` は `punches` から計算される `computed` であるため、打刻を 1 件
+追加すれば `days` が再計算され、それを参照しているコンポーネントだけが再描画される。
+`watch(source, cb)` は値の変化を監視して副作用を実行するものであり、本アプリケーションでは
+`localStorage` への保存に用いている。

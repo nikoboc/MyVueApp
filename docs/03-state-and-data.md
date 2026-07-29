@@ -1,245 +1,188 @@
 # 03 — 状態とデータ
 
-本ドキュメントが扱う範囲がアプリケーションの中核である。ストアとデータモデルが確定すれば、
+本ドキュメントが扱う範囲がアプリケーションの中核である。ドメインモデルと集計処理が固まれば、
 コンポーネントの実装はほぼ自動的に決まる。
 
-## 型付きのドメインモデル（`src/types/weather.ts`）
+## 基本方針: 保存するのは打刻の列だけ
 
-最初に構造を定義する。Java エンジニアにとっては馴染みのある作業であり、ここを固めることで後続の
-実装が容易になる。
+勤怠アプリの設計では、次の 2 つが考えられる。
 
-```ts
-// ユーザーが検索して追加した地点
-export interface Location {
-  id: string          // v-for 用の一意なキー。`${latitude},${longitude}` の形式とする
-  name: string        // "東京都"
-  country: string     // "日本"
-  latitude: number
-  longitude: number
-}
+| 方式 | 保存するもの | 修正の意味 |
+|------|------------|----------|
+| **イベントログ方式**（採用） | 打刻 1 件ずつ | 個々の打刻を編集・追加・削除する |
+| 日次レコード方式 | 1 日 1 件のレコード | その日のフォームを編集する |
 
-// 現在の気象状況。API のレスポンスを正規化したもの
-export interface CurrentWeather {
-  temperature: number
-  humidity: number
-  windSpeed: number
-  weatherCode: number // WMO コード。weatherCodes.ts でラベルとアイコンに変換する
-  time: string        // API が返す ISO 形式のタイムスタンプ
-}
+本プロジェクトはイベントログ方式を採用する。実際の打刻機に近く、休憩を複数回取る場合や中抜けにも
+そのまま対応できる。また、集計を保存しないため、打刻と集計が食い違うことがない。
 
-// 添字が対応する配列（Chart.js に適した形式）。times[i] と temperatures[i] が対応する
-export interface HourlySeries {
-  times: string[]
-  temperatures: number[]
-}
-
-export interface DailySeries {
-  dates: string[]
-  tempMax: number[]
-  tempMin: number[]
-  weatherCodes: number[]
-}
-
-// 1 地点について保持するデータ一式
-export interface Forecast {
-  current: CurrentWeather
-  hourly: HourlySeries
-  daily: DailySeries
-  fetchedAt: number   // 保存時点の Date.now()。最終更新の表示に用いる
-}
-```
-
-## Open-Meteo API（`src/services/weatherApi.ts`）
-
-使用するエンドポイントは 2 つである。API キーは不要で、CORS にも対応している。
-公式ドキュメント: https://open-meteo.com/en/docs
-
-### 1. ジオコーディング（都市名 → 座標）
-
-```
-GET https://geocoding-api.open-meteo.com/v1/search?name=Tokyo&count=5&language=ja&format=json
-```
-
-レスポンス（抜粋）:
-
-```json
-{
-  "results": [
-    { "id": 1850147, "name": "東京都", "latitude": 35.6895, "longitude": 139.69171,
-      "country": "日本", "admin1": "東京都" }
-  ]
-}
-```
-
-> ⚠️ `language=ja` が影響するのは**返却されるラベル**のみであり、**検索クエリ**には影響しない。
-> Open-Meteo の検索インデックスは日本の都市を漢字およびひらがなで検索できないため、`name=東京` は
-> 0 件となる。ローマ字で `name=Tokyo` とすれば「東京都」が返る。外国の都市はカタカナでも検索できる
-> （`name=ベルリン` → 「ベルリン」）が、日本の都市は検索できない。この差異があるため、検索欄では
-> ローマ字入力を案内している。
-
-> 該当が 1 件も無い場合、API は `results` キー自体を返さない（空配列ではなく、キーが存在しない）。
-> 呼び出し側で対応する必要がある（`data.results ?? []`）。
-
-### 2. 予報（座標 → 天気）
-
-```
-GET https://api.open-meteo.com/v1/forecast
-    ?latitude=35.6895&longitude=139.69171
-    &current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code
-    &hourly=temperature_2m
-    &daily=temperature_2m_max,temperature_2m_min,weather_code
-    &timezone=auto
-    &forecast_days=7
-```
-
-レスポンス（抜粋）:
-
-```json
-{
-  "current": {
-    "time": "2026-07-14T18:00",
-    "temperature_2m": 21.3,
-    "relative_humidity_2m": 55,
-    "wind_speed_10m": 12.4,
-    "weather_code": 3
-  },
-  "hourly": {
-    "time": ["2026-07-14T00:00", "..."],
-    "temperature_2m": [18.1, 17.6, "..."]
-  },
-  "daily": {
-    "time": ["2026-07-14", "..."],
-    "temperature_2m_max": [24.0, "..."],
-    "temperature_2m_min": [14.0, "..."],
-    "weather_code": [3, "..."]
-  }
-}
-```
-
-### サービス層の役割
-
-サービス層が返すのは生の API JSON ではなく、本アプリケーションのドメイン型である。変換（腐敗防止層）を
-ここに配置することで、他の層が Open-Meteo のフィールド名に依存しなくなる。Java において DTO を
-ドメインオブジェクトへ詰め替えるのと同じ理由による。
+## ドメインモデル（`src/types/attendance.ts`）
 
 ```ts
-export async function geocode(query: string): Promise<Location[]> { /* 取得して変換する */ }
-export async function getForecast(loc: Location): Promise<Forecast> { /* 取得して変換する */ }
-```
+// 実行時にも値の一覧が必要なため、as const の配列から型を導出する（docs/05 §3）
+export const PUNCH_TYPES = ['clock-in', 'break-start', 'break-end', 'clock-out'] as const
+export type PunchType = (typeof PUNCH_TYPES)[number]
 
-単位については、ストレッチ課題の単位切り替えにおいて、リクエストパラメーターに
-`temperature_unit=fahrenheit` や `wind_speed_unit=mph` を追加できる。
+// 保存されるのはこれだけ
+export interface Punch {
+  readonly id: string
+  readonly type: PunchType
+  readonly at: string   // ローカル時刻 "YYYY-MM-DDTHH:mm"
+}
 
-### WMO 天気コード（`src/services/weatherCodes.ts`）
+export type WorkStatus = 'before-work' | 'working' | 'on-break' | 'after-work'
 
-Open-Meteo は天気を [WMO コード](https://open-meteo.com/en/docs)で返す（0 が快晴、1〜3 が晴れから
-くもり、45/48 が霧、51〜67 が雨、71〜77 が雪、80〜82 がにわか雨、95〜99 が雷雨）。変換用のマップを
-用意する。
+// 打刻の不整合。判別可能なユニオン（docs/05 §7）
+export type PunchIssue =
+  | { readonly kind: 'unclosed-work' }
+  | { readonly kind: 'unclosed-break' }
+  | { readonly kind: 'orphan-clock-out' }
+  | { readonly kind: 'orphan-break-end' }
 
-```ts
-export const weatherCodes: Record<number, { label: string; icon: string }> = {
-  0: { label: "快晴", icon: "☀️" },
-  3: { label: "くもり", icon: "☁️" },
-  // ...以下を埋める
+// すべて打刻列から導出される。保存はしない
+export interface DaySummary {
+  readonly date: string
+  readonly punches: readonly Punch[]
+  readonly presentMs: number      // 在社時間
+  readonly breakMs: number        // 休憩時間
+  readonly workedMs: number       // 実働 = 在社 - 休憩
+  readonly status: WorkStatus
+  readonly openSince: string | undefined
+  readonly issues: readonly PunchIssue[]
 }
 ```
 
-## Pinia ストア（`src/stores/useWeatherStore.ts`）
+### 時刻をローカルの文字列で持つ理由
+
+打刻は `"2026-07-29T09:02"` という、タイムゾーン情報を持たない文字列で保持する。`Date` の ISO 文字列
+（UTC）を用いない理由は次のとおりである。
+
+- 勤怠では「9:02 に出勤した」という壁時計の時刻がそのまま記録である。UTC への変換は表示のたびに
+  戻す必要があり、不要な複雑さを持ち込む。
+- 桁数が固定されているため、辞書順の比較がそのまま時刻順になる。並べ替えに解析が要らない。
+- 先頭 10 文字がそのまま日付キーになるため、日ごとのグループ化が容易である。
+
+## 集計処理（`src/services/attendance.ts`）
+
+本アプリケーションの中核であり、Vue を含まない純粋な TypeScript として単体テストできる。
+
+### 現在時刻を参照しない
+
+`summarizeDay` は現在時刻を引数に取らない。退勤していない勤務のような、区切られていない区間は経過
+時間に加算せず、不整合として報告するだけにとどめる。
+
+この判断により、集計は入力だけで結果が決まる純粋な関数になる。同じ打刻を渡せば常に同じ結果が返る
+ため、テストが容易である。「勤務中の経過時間を実時間で表示する」という要求は、現在時刻を持つ
+コンポーネント側（`useNow`）の責務として分離している。
+
+```ts
+export function summarizeDay(date: string, punches: readonly Punch[]): DaySummary
+```
+
+### 集計のアルゴリズム
+
+打刻を時刻順にたどり、対になる打刻から時間を積み上げる。
+
+| 打刻 | 処理 |
+|------|------|
+| `clock-in` | 勤務の開始時刻を保持する。すでに保持していれば `unclosed-work` |
+| `clock-out` | 開始時刻との差を在社時間へ加算する。開始が無ければ `orphan-clock-out` |
+| `break-start` | 休憩の開始時刻を保持する。すでに保持していれば `unclosed-break` |
+| `break-end` | 開始時刻との差を休憩時間へ加算する。開始が無ければ `orphan-break-end` |
+
+最後まで対にならなかった区間は、時間に加算せず不整合として報告する。対ごとに加算するため、1 日に
+複数回の出退勤（中抜け）があっても正しく合計される。
+
+```
+09:00 出勤 / 12:00 退勤 / 13:00 出勤 / 18:00 退勤
+  → 在社 8時間、実働 8時間、不整合なし
+```
+
+### 打てる打刻の制御
+
+```ts
+export function allowedPunchTypes(status: WorkStatus): readonly PunchType[]
+```
+
+| 状態 | 打てる打刻 |
+|------|----------|
+| `before-work` | 出勤 |
+| `working` | 休憩開始、退勤 |
+| `on-break` | 休憩終了 |
+| `after-work` | 出勤（中抜けからの再出勤） |
+
+画面ではボタンを 4 つとも表示したうえで、打てないものを無効にする。ボタンの位置が状態によって動か
+ないため、押し間違いが起きにくい。
+
+## 保存層（`src/services/punchStorage.ts`）
+
+`localStorage` への保存と読み込みを担当する。キーは `timecard.punches.v1` である。
+
+### 読み込み時に検証する理由
+
+`localStorage` は API と同じく外部の境界であり、返ってくる値に型の保証はない。利用者が開発者ツールで
+書き換えることもでき、アプリの旧版が別の形式で書いたデータが残っている可能性もある。そのため
+`JSON.parse` の結果を `unknown` として受け、1 件ずつ検証して条件を満たさないものは捨てる
+（docs/05 §6）。
+
+```ts
+export function loadPunches(): Punch[]                       // 壊れていれば空配列
+export function savePunches(punches: readonly Punch[]): void // 失敗時は例外
+export function createPunchId(): string
+```
+
+読み込みは起動時の 1 回だけであり、ここで失敗してアプリが使えなくなっては困る。そのため壊れたデータは
+例外にせず、空の状態として扱う。一方、保存の失敗（保存領域の上限など）は利用者に伝える必要があるため
+例外として送出し、ストアが受け取って `error` に反映する。
+
+## Pinia ストア（`src/stores/useAttendanceStore.ts`）
 
 グローバルな状態を配置する場所が Pinia である。1 つのストアは、状態を保持しメソッドを公開する
-シングルトンのサービス Bean に相当する。コンポーネントはストアを取得し、そのアクションを呼び出す。
+シングルトンのサービス Bean に相当する。
 
 ### 構成
 
-setup 形式の Pinia は 3 つの要素から構成される。
+| 要素 | 内容 |
+|------|------|
+| **state** | `punches`（打刻の列）、`error` |
+| **getters** | `days`（日付ごとの集計。新しい日が先頭） |
+| **actions** | `punch`、`addPunch`、`updatePunch`、`removePunch`、`summaryFor` |
 
-| 要素 | 実体 | Java における対応物 |
-|------|----|--------------|
-| **state** | リアクティブなフィールド（`ref`） | Bean のインスタンスフィールド |
-| **getters** | キャッシュされる導出値（`computed`） | キャッシュ付きのゲッター |
-| **actions** | メソッド。非同期も可能で、状態を変更する | Bean のサービスメソッド |
-
-### 設計
+状態として保持するのは `punches` だけである。`days` は `computed` であり、打刻を 1 件修正すれば集計も
+表示も自動的に追随する。
 
 ```ts
-import { defineStore } from "pinia"
-import { ref } from "vue"
-import type { Location, Forecast } from "@/types/weather"
-import { geocode, getForecast } from "@/services/weatherApi"
-
-export const useWeatherStore = defineStore("weather", () => {
-  // ---- state ----
-  const locations = ref<Location[]>([])
-  const forecasts = ref<Record<string, Forecast>>({})   // location.id をキーとする
-  const loadingIds = ref<Set<string>>(new Set())         // 取得中のカード
+export const useAttendanceStore = defineStore('attendance', () => {
+  const punches = ref<Punch[]>(loadPunches())
   const error = ref<string | null>(null)
 
-  // ---- getters (computed) ----
-  // 例: const hasLocations = computed(() => locations.value.length > 0)
+  const days = computed<DaySummary[]>(() => summarizeByDate(punches.value))
 
-  // ---- actions ----
-  async function addLocation(loc: Location) {
-    if (forecasts.value[loc.id]) return          // 重複を防ぐ
-    locations.value.push(loc)
-    await refreshLocation(loc.id)
-  }
+  watch(punches, (value) => { savePunches(value) }, { deep: true })
 
-  async function refreshLocation(id: string) {
-    const loc = locations.value.find(l => l.id === id)
-    if (!loc) return
-    loadingIds.value.add(id)
-    error.value = null
-    try {
-      forecasts.value[id] = await getForecast(loc)
-    } catch (e) {
-      error.value = `${loc.name}の読み込みに失敗しました`
-    } finally {
-      loadingIds.value.delete(id)
-    }
-  }
+  function punch(type: PunchType, atMs: number = Date.now()): void { /* ... */ }
+  function addPunch(type: PunchType, at: string): boolean { /* ... */ }
+  function updatePunch(id: string, type: PunchType, at: string): boolean { /* ... */ }
+  function removePunch(id: string): void { /* ... */ }
 
-  function removeLocation(id: string) {
-    locations.value = locations.value.filter(l => l.id !== id)
-    delete forecasts.value[id]
-  }
-
-  async function refreshAll() {
-    await Promise.all(locations.value.map(l => refreshLocation(l.id)))
-  }
-
-  return { locations, forecasts, loadingIds, error,
-           addLocation, refreshLocation, removeLocation, refreshAll }
+  return { punches, error, days, summaryFor, punch, addPunch, updatePunch, removePunch }
 })
 ```
 
-> 実装上の補足: 上記の重複チェックは `forecasts` を参照しているが、実際の
-> `src/stores/useWeatherStore.ts` では `locations` を参照するよう修正している。取得に失敗した地点は
-> `forecasts` にエントリーを持たないため、`forecasts` を基準にすると同一の都市を二重に追加できて
-> しまう。理由はコード側のコメントに記載している。
+### 保存を `watch` で行う理由
 
-### API 呼び出しをコンポーネントではなくストアに配置する理由
+各アクションの末尾で保存を呼ぶ方法もあるが、それではアクションを追加するたびに保存漏れが起こりうる。
+`watch` で状態の変化に反応させておけば、保存の責務がこの 1 か所にまとまる。
 
-- **状態が一箇所に集約される。** すべてのカードが同一の `forecasts` を参照するため、取得処理が重複しない。
-- **テストが容易になる。** ストアのロジックは、コンポーネントをマウントせずにテストできる。
-- **リアクティビティが自動的に働く。** `forecasts.value[id] = ...` の代入により、参照している
-  すべてのコンポーネントへ変更が伝播する。
+配列の中身（既存の打刻の時刻）を書き換えても反応させたいため `deep: true` を指定している。
 
-> ⚠️ 注意点として、オブジェクトへの新しいキーの追加を Vue に認識させる場合は、深い階層を変更するのでは
-> なく、上記のように値を代入する。`ref<Record<...>>` において `forecasts.value[id] = x` が機能するのは、
-> `.value` を経由して参照しているためである。オブジェクトおよび配列のリアクティビティには例外的な
-> 挙動も存在する。
+> ⚠️ `updatePunch` では要素を書き換えるのではなく `splice` で差し替えている。オブジェクトのプロパティを
+> 直接変更しても `deep` な `watch` は反応するが、要素ごと差し替えるほうが変更の伝播が明確であり、
+> `readonly` を付けたドメイン型とも整合する。
 
-## 自動更新の方針
+## 現在時刻の扱い（`src/composables/useNow.ts`）
 
-- `setInterval` により N 分ごとに `refreshAll()` を呼び出す（既定は 10 分。天気の変化は緩やかであり、
-  無料 API への負荷も抑えられる）。
-- タイマーは `App.vue` の `onMounted` で開始し、**`onUnmounted` で破棄する**。クリーンアップの漏れは
-  メモリリークにつながるため、これを学習項目として `useAutoRefresh` コンポーザブル（開始と破棄をまとめた
-  再利用可能な関数）へ切り出す。
-- 各 `Forecast` が `fetchedAt` を保持するため、カードごとに「3 分前に更新」といった表示が可能となる。
+集計が現在時刻を参照しないため、実時間の表示はコンポーネント側で行う。`useNow` は
+`useAutoRefresh` を用いて一定間隔で更新される現在時刻を返す。
 
-## 設定ストア（ストレッチ — `src/stores/useSettingsStore.ts`）
-
-`units`（`"metric" | "imperial"`）と `theme` を保持する 2 つ目のストアである。ストア間の
-リアクティビティの例となる。単位が変更されると、天気ストアが新しい単位で再取得するか、コンポーネントが
-表示値を再計算する。切り替え 1 つでアプリケーション全体が反応する点が、状態を集約したことの利点である。
+`PunchPanel` では、この現在時刻に依存する `computed` を経過時間の算出だけに限定している。確定済みの
+集計は `now` を参照しないため、1 秒ごとに再計算されることはない。
