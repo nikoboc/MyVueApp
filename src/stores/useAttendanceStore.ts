@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 
-import { summarizeByDate, summarizeDay } from '@/services/attendance'
+import { summarizeByDate, summarizeDay, summarizeMonth } from '@/services/attendance'
 import { createPunchId, loadPunches, savePunches } from '@/services/punchStorage'
 import { formatDateTime, parseDateTime } from '@/services/time'
-import type { DaySummary, Punch, PunchType } from '@/types/attendance'
+import type { DaySummary, MonthSummary, Punch, PunchType } from '@/types/attendance'
 
 /**
  * 打刻を保持する中心のストア。状態はここに集約され、コンポーネントはここから
@@ -59,6 +59,16 @@ export const useAttendanceStore = defineStore('attendance', () => {
    */
   function summaryFor(date: string): DaySummary {
     return days.value.find((day) => day.date === date) ?? summarizeDay(date, [])
+  }
+
+  /**
+   * 指定した月の集計を返す。打刻が 1 件も無い月でも、0 が並んだ集計を返す。
+   *
+   * @param month - 月キー "YYYY-MM"
+   * @returns その月の集計
+   */
+  function monthSummaryFor(month: string): MonthSummary {
+    return summarizeMonth(month, days.value)
   }
 
   /**
@@ -123,6 +133,7 @@ export const useAttendanceStore = defineStore('attendance', () => {
     error,
     days,
     summaryFor,
+    monthSummaryFor,
     punch,
     addPunch,
     updatePunch,

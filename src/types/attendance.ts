@@ -59,3 +59,20 @@ export interface DaySummary {
   readonly openSince: string | undefined
   readonly issues: readonly PunchIssue[]
 }
+
+/** 1 か月分の集計。日ごとの集計をさらに合算したもの。 */
+export interface MonthSummary {
+  /** 月キー "YYYY-MM"。 */
+  readonly month: string
+  /** その月の、打刻がある日の集計。日付の昇順。 */
+  readonly days: readonly DaySummary[]
+  readonly presentMs: number
+  readonly breakMs: number
+  readonly workedMs: number
+  /** 打刻がある日の数。 */
+  readonly dayCount: number
+  /** 不整合が検出された日の数。 */
+  readonly issueDayCount: number
+  /** 1 日あたりの平均実働時間。打刻がある日が無い場合は 0。 */
+  readonly averageWorkedMs: number
+}

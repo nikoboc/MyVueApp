@@ -9,6 +9,8 @@
 
 const DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
 
+const MONTH_PATTERN = /^(\d{4})-(\d{2})$/
+
 const MINUTE_MS = 60_000
 const HOUR_MS = 60 * MINUTE_MS
 
@@ -136,6 +138,83 @@ export function formatDuration(ms: number): string {
   const hours = Math.floor(safeMs / HOUR_MS)
   const minutes = Math.floor((safeMs % HOUR_MS) / MINUTE_MS)
   return hours < 1 ? `${minutes}分` : `${hours}時間${minutes}分`
+}
+
+/**
+ * 日付キーまたは打刻時刻から月キーを取り出す。
+ *
+ * @param value - "YYYY-MM-DD" または "YYYY-MM-DDTHH:mm" 形式の文字列
+ * @returns "YYYY-MM" 形式の月キー
+ */
+export function toMonthKey(value: string): string {
+  return value.slice(0, 7)
+}
+
+/**
+ * 文字列が月キーの形式かどうかを判定する。
+ *
+ * URL から受け取った値をそのまま使う前に確認するために用いる。
+ *
+ * @param value - 判定する文字列
+ * @returns "YYYY-MM" 形式で、月が 1〜12 の範囲であれば true
+ */
+export function isMonthKey(value: string): boolean {
+  const match = MONTH_PATTERN.exec(value)
+  if (match === null) {
+    return false
+  }
+  const month = match[2]
+  if (month === undefined) {
+    return false
+  }
+  return 1 <= Number(month) && Number(month) <= 12
+}
+
+/**
+ * 月キーを前後に移動する。
+ *
+ * 年をまたぐ計算は `Date` に任せる。月に 12 を足したり引いたりする処理を自前で
+ * 書くと、12 月の翌月や 1 月の前月で誤りが混入しやすい。
+ *
+ * @param month - "YYYY-MM" 形式の月キー
+ * @param offset - 移動する月数。負の値で過去へ移動する
+ * @returns 移動後の月キー。入力が不正な場合はそのまま返す
+ */
+export function shiftMonth(month: string, offset: number): string {
+  const match = MONTH_PATTERN.exec(month)
+  const year = match?.[1]
+  const monthPart = match?.[2]
+  if (year === undefined || monthPart === undefined) {
+    return month
+  }
+  const shifted = new Date(Number(year), Number(monthPart) - 1 + offset, 1)
+  return `${shifted.getFullYear()}-${pad2(shifted.getMonth() + 1)}`
+}
+
+/**
+ * 現在時刻に対応する月キーを返す。
+ *
+ * @param nowMs - 現在時刻（エポックミリ秒）
+ * @returns "YYYY-MM" 形式の月キー
+ */
+export function currentMonthKey(nowMs: number): string {
+  return toMonthKey(formatDateTime(nowMs))
+}
+
+/**
+ * 月キーを表示用のラベルに整形する。
+ *
+ * @param month - "YYYY-MM" 形式の月キー
+ * @returns 「2026年7月」のような文字列。解析できない場合は入力をそのまま返す
+ */
+export function formatMonthLabel(month: string): string {
+  const match = MONTH_PATTERN.exec(month)
+  const year = match?.[1]
+  const monthPart = match?.[2]
+  if (year === undefined || monthPart === undefined) {
+    return month
+  }
+  return `${Number(year)}年${Number(monthPart)}月`
 }
 
 /**

@@ -1,5 +1,12 @@
-import { parseDateTime, toDateKey } from '@/services/time'
-import type { DaySummary, Punch, PunchIssue, PunchType, WorkStatus } from '@/types/attendance'
+import { parseDateTime, toDateKey, toMonthKey } from '@/services/time'
+import type {
+  DaySummary,
+  MonthSummary,
+  Punch,
+  PunchIssue,
+  PunchType,
+  WorkStatus,
+} from '@/types/attendance'
 
 /**
  * 打刻列から勤務時間を導出する集計処理。本アプリケーションの中核であり、Vue を
@@ -144,6 +151,39 @@ export function summarizeByDate(punches: readonly Punch[]): DaySummary[] {
         punches.filter((punch) => toDateKey(punch.at) === date),
       ),
     )
+}
+
+/**
+ * 1 か月分を集計する。
+ *
+ * 日ごとの集計を受け取って合算するだけであり、打刻から数え直すことはしない。
+ * 同じ計算を二重に持たないため、日次と月次で結果が食い違うことがない。
+ *
+ * @param month - 対象の月キー "YYYY-MM"
+ * @param days - 全期間の日次集計。順序は問わない
+ * @returns 集計結果。対象月に打刻が無い場合も、0 が並んだ結果を返す
+ */
+export function summarizeMonth(month: string, days: readonly DaySummary[]): MonthSummary {
+  // 月内は日付の昇順で見るほうが、勤務の流れを追いやすい。
+  const inMonth = days
+    .filter((day) => toMonthKey(day.date) === month)
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const presentMs = inMonth.reduce((total, day) => total + day.presentMs, 0)
+  const breakMs = inMonth.reduce((total, day) => total + day.breakMs, 0)
+  const workedMs = inMonth.reduce((total, day) => total + day.workedMs, 0)
+  const dayCount = inMonth.length
+
+  return {
+    month,
+    days: inMonth,
+    presentMs,
+    breakMs,
+    workedMs,
+    dayCount,
+    issueDayCount: inMonth.filter((day) => 0 < day.issues.length).length,
+    averageWorkedMs: dayCount < 1 ? 0 : Math.round(workedMs / dayCount),
+  }
 }
 
 /**
