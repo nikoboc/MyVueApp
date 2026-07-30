@@ -33,8 +33,11 @@ jobs:
       # package-lock.json のとおりに入れる。npm install と違い、内容を書き換えない。
       - run: npm ci
 
-      # 型チェックも実行される（package.json の build を参照）。型エラーがあれば
-      # ここで失敗し、壊れた状態が公開されることはない。
+      # テストを先に走らせる。失敗すれば以降のステップは実行されず、壊れた状態が
+      # 公開されることはない。
+      - run: npm test
+
+      # 型チェックも実行される（package.json の build を参照）。
       # base パスは GITHUB_REPOSITORY から vite.config.ts が導出する。
       - run: npm run build
 
